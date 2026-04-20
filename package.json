@@ -1,0 +1,18 @@
+{
+  "name": "mathbounty-workspace",
+  "private": true,
+  "workspaces": [
+    "contract",
+    "web"
+  ],
+  "scripts": {
+    "contract:compile": "npm run -w contract compile",
+    "contract:test": "npm run -w contract test",
+    "contract:deploy": "npm run -w contract deploy",
+    "web:dev": "npm run -w web dev",
+    "web:build": "npm run -w web build",
+    "web:start": "npm run -w web start",
+    "build": "npm run contract:compile && npm run web:build",
+    "test": "npm run contract:test"
+  }
+}
