@@ -1,26 +1,319 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brutalist Dark — Raw terminal, exposed structure */
+  --surface: #0a0a0a;
+  --surface-raised: #111111;
+  --surface-sunken: #050505;
+  --ink: #f0f0f0;
+  --ink-muted: #888888;
+  --ink-faint: #555555;
+  --brand: #ff3b00;
+  --brand-dim: #cc2f00;
+  --brand-glow: rgba(255, 59, 0, 0.3);
+  --success: #00c853;
+  --success-dim: #00a344;
+  --error: #ff1744;
+  --error-dim: #d50000;
+  --border: #222222;
+  --border-strong: #333333;
+  --border-brutal: #f0f0f0;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* Brutalist Light — Raw paper, stark contrast */
+    --surface: #fafafa;
+    --surface-raised: #ffffff;
+    --surface-sunken: #f0f0f0;
+    --ink: #0a0a0a;
+    --ink-muted: #666666;
+    --ink-faint: #999999;
+    --brand: #ff3b00;
+    --brand-dim: #cc2f00;
+    --brand-glow: rgba(255, 59, 0, 0.2);
+    --success: #00a344;
+    --success-dim: #008f3b;
+    --error: #d50000;
+    --error-dim: #b00000;
+    --border: #dddddd;
+    --border-strong: #cccccc;
+    --border-brutal: #0a0a0a;
   }
 }
 
+@theme inline {
+  /* Colors */
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-brand: var(--brand);
+  --color-brand-dim: var(--brand-dim);
+  --color-brand-glow: var(--brand-glow);
+  --color-success: var(--success);
+  --color-success-dim: var(--success-dim);
+  --color-error: var(--error);
+  --color-error-dim: var(--error-dim);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-border-brutal: var(--border-brutal);
+
+  /* Typography */
+  --font-display: var(--font-display), "Arial Narrow", Impact, sans-serif;
+  --font-body: var(--font-body), system-ui, sans-serif;
+  --font-mono: var(--font-mono), "Courier New", monospace;
+
+  /* Spacing (4px base, semantic names) */
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-12: 48px;
+  --spacing-16: 64px;
+  --spacing-24: 96px;
+
+  /* Border radius — zero for brutalism */
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+}
+
+/* Base styles */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Brutalist selection — harsh inversion */
+::selection {
+  background: var(--ink);
+  color: var(--surface);
+}
+
+/* Scrollbar — raw, minimal */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface-sunken);
+  border-left: 1px solid var(--border);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ink-muted);
+  border: 1px solid var(--surface);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink);
+}
+
+/* Focus visible — stark outline */
+:focus-visible {
+  outline: 3px solid var(--brand);
+  outline-offset: 3px;
+}
+
+/* Code blocks — raw terminal aesthetic */
+pre,
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+}
+
+pre {
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+/* Brutalist grid pattern — exposed structure */
+.bg-grid {
+  background-image: 
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Aggressive border utility */
+.border-brutal {
+  border: 2px solid var(--border-brutal);
+}
+
+.border-brutal-thick {
+  border: 4px solid var(--border-brutal);
+}
+
+/* Keyframes */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(60px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(3rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes zoom-in-95 {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes glitch {
+  0%, 100% { transform: translate(0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(-2px, -2px); }
+  60% { transform: translate(2px, 2px); }
+  80% { transform: translate(2px, -2px); }
+}
+
+/* Staggered reveal system — sharper, heavier */
+.reveal-container {
+  --stagger-delay: 0.1s;
+}
+
+.reveal-item {
+  opacity: 0;
+  transform: translateY(60px);
+  animation: slide-up 0.7s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
+.reveal-item:nth-child(1) { animation-delay: calc(var(--stagger-delay) * 1); }
+.reveal-item:nth-child(2) { animation-delay: calc(var(--stagger-delay) * 2); }
+.reveal-item:nth-child(3) { animation-delay: calc(var(--stagger-delay) * 3); }
+.reveal-item:nth-child(4) { animation-delay: calc(var(--stagger-delay) * 4); }
+.reveal-item:nth-child(5) { animation-delay: calc(var(--stagger-delay) * 5); }
+.reveal-item:nth-child(6) { animation-delay: calc(var(--stagger-delay) * 6); }
+.reveal-item:nth-child(7) { animation-delay: calc(var(--stagger-delay) * 7); }
+.reveal-item:nth-child(8) { animation-delay: calc(var(--stagger-delay) * 8); }
+
+/* Slide from right variant */
+.reveal-right {
+  opacity: 0;
+  transform: translateX(60px);
+  animation: slide-in-right 0.7s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
+.reveal-right:nth-child(1) { animation-delay: calc(var(--stagger-delay) * 1); }
+.reveal-right:nth-child(2) { animation-delay: calc(var(--stagger-delay) * 2); }
+.reveal-right:nth-child(3) { animation-delay: calc(var(--stagger-delay) * 3); }
+.reveal-right:nth-child(4) { animation-delay: calc(var(--stagger-delay) * 4); }
+
+/* Fade variant */
+.reveal-fade {
+  opacity: 0;
+  animation: fade-in 0.5s ease-out forwards;
+}
+
+.reveal-fade:nth-child(1) { animation-delay: calc(var(--stagger-delay) * 1); }
+.reveal-fade:nth-child(2) { animation-delay: calc(var(--stagger-delay) * 2); }
+.reveal-fade:nth-child(3) { animation-delay: calc(var(--stagger-delay) * 3); }
+.reveal-fade:nth-child(4) { animation-delay: calc(var(--stagger-delay) * 4); }
+
+/* Duration utilities */
+.duration-fast {
+  transition-duration: 150ms;
+}
+
+.duration-normal {
+  transition-duration: 250ms;
+}
+
+.duration-slow {
+  transition-duration: 400ms;
+}
+
+/* Easing utilities */
+.ease-out-quart {
+  transition-timing-function: cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.ease-out-expo {
+  transition-timing-function: cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+/* Terminal scanline effect */
+.terminal-scanline {
+  position: relative;
+  overflow: hidden;
+}
+
+.terminal-scanline::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: linear-gradient(to bottom, transparent, var(--brand-glow), transparent);
+  opacity: 0.4;
+  animation: scanline 3s linear infinite;
+  pointer-events: none;
+}
+
+/* Glitch effect for brutalist emphasis */
+.glitch-hover:hover {
+  animation: glitch 0.2s ease-in-out;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .reveal-item,
+  .reveal-right,
+  .reveal-fade {
+    opacity: 1;
+    transform: none;
+  }
 }
