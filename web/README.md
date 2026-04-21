@@ -18,7 +18,11 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Fonts ([Bebas Neue](https://fonts.google.com/specimen/Bebas+Neue), [DM Sans](https://fonts.google.com/specimen/DM+Sans), [JetBrains Mono](https://fonts.google.com/specimen/JetBrains+Mono)) load via `next/font/google` in `app/layout.tsx`.
+
+## For contributors
+
+- **Design system** — With the dev server running, open [http://localhost:3000/design-system](http://localhost:3000/design-system). That route is the living documentation for tokens (`lib/tokens.ts`) and UI components (`components/ui/`); use it before building new UI. On Vercel previews, append `/design-system` to the deployment URL.
 
 ## Learn More
 
