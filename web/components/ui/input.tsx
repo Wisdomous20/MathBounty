@@ -35,10 +35,9 @@ export function Input({
         disabled={isDisabled}
         className={cn(
           "h-10 w-full border bg-surface-raised px-3 text-base text-ink placeholder:text-ink-faint font-body transition-all duration-fast ease-out-quart",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
           isError
-            ? "border-error focus-visible:ring-error"
-            : "border-border hover:border-border-strong",
+            ? "border-error focus-visible:border-brand"
+            : "border-border hover:border-border-strong focus-visible:border-brand",
           isDisabled && "opacity-50 cursor-not-allowed bg-surface-sunken",
           className
         )}
