@@ -27,7 +27,7 @@ export function BountyCard({
     <div
       className={cn(
         "border bg-surface-raised p-4 transition-all duration-fast ease-out-quart",
-        "hover:border-border-strong",
+        "hover:border-border-strong active:scale-[0.995]",
         statusConfig.borderColor,
         className
       )}
@@ -53,7 +53,7 @@ export function BountyCard({
           <span className="text-ink-faint font-display text-xs uppercase tracking-wider">
             Reward
           </span>
-          <span className="font-mono font-medium text-brand">{reward}</span>
+          <span className="font-mono font-medium text-brand tabular-nums">{reward}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-ink-faint font-display text-xs uppercase tracking-wider">

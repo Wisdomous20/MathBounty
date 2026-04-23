@@ -48,7 +48,28 @@ export function BountyPylon({ onNewBounty }: BountyPylonProps) {
 
   // Pre-fill with existing feed items on first load
   useEffect(() => {
-    if (initializedRef.current || items.length === 0) return;
+    if (initializedRef.current) return;
+
+    if (items.length === 0) {
+      // Empty state — feed has no data yet
+      dataRef.current = [
+        { text: "// Waiting for network activity...", isNew: false, age: 0 },
+        ...Array.from({ length: lineCount - 1 }, () => ({ text: "", isNew: false, age: 0 })),
+      ];
+      linesRef.current.forEach((el, i) => {
+        if (!el) return;
+        const d = dataRef.current[i];
+        if (d) {
+          el.textContent = d.text;
+          el.className = `whitespace-pre transition-colors duration-500 ${
+            i === 0 ? "text-ink-faint italic" : "text-ink-faint"
+          }`;
+        }
+      });
+      initializedRef.current = true;
+      return;
+    }
+
     initializedRef.current = true;
 
     dataRef.current = items.slice(0, lineCount).map((item) => ({
@@ -142,7 +163,7 @@ export function BountyPylon({ onNewBounty }: BountyPylonProps) {
   }, []);
 
   return (
-    <div className="relative h-[520px] overflow-hidden border-2 border-border bg-surface-sunken">
+    <div className="relative h-[580px] md:h-[620px] overflow-hidden border-2 border-border bg-surface-sunken shadow-[8px_8px_0px_0px_rgba(255,59,0,0.15)]">
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 z-20 border-b-2 border-border bg-surface px-3 py-2">
         <div className="flex items-center justify-between">

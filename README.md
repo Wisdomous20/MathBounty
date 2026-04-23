@@ -19,6 +19,8 @@ npm run contract:test
 npm run contract:deploy
 npm run web:dev
 npm run web:build
+npm run web:typecheck
+npm run web:lint
 ```
 
 ## For contributors

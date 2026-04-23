@@ -4,31 +4,32 @@ pragma solidity ^0.8.28;
 contract MathBounty {
     enum BountyStatus {
         Open,
-        Solved,
-        Expired,
-        Claimed
+        Paid,
+        Expired
     }
 
     struct Bounty {
-        uint256 id;
         address poster;
-        uint256 reward;
-        string problemStatement;
         bytes32 answerHash;
-        uint256 deadline;
-        address solver;
+        uint256 reward;
+        uint256 expiresAt;
         BountyStatus status;
     }
+
+    error RewardTooLow();
+    error InvalidExpiry();
 
     uint256 public bountyCount;
     mapping(uint256 => Bounty) private bounties;
     mapping(address => uint256[]) private posterBounties;
-    mapping(address => uint256[]) private solverHistory;
 
-    event BountyCreated(uint256 indexed id, address indexed poster, uint256 reward, uint256 deadline);
-    event BountySolved(uint256 indexed id, address indexed solver, uint256 reward);
-    event AnswerAttempted(uint256 indexed id, address indexed solver, bool success);
-    event BountyRefunded(uint256 indexed id, address indexed poster, uint256 reward);
+    event BountyPosted(
+        uint256 indexed bountyId,
+        address indexed poster,
+        bytes32 answerHash,
+        uint256 reward,
+        uint256 expiresAt
+    );
 
     modifier onlyOpen(uint256 bountyId) {
         require(bounties[bountyId].status == BountyStatus.Open, "Bounty is not open");
@@ -36,77 +37,66 @@ contract MathBounty {
     }
 
     modifier notExpired(uint256 bountyId) {
-        require(block.timestamp <= bounties[bountyId].deadline, "Bounty has expired");
+        require(block.timestamp <= bounties[bountyId].expiresAt, "Bounty has expired");
         _;
     }
 
-    modifier isExpired(uint256 bountyId) {
-        require(block.timestamp > bounties[bountyId].deadline, "Bounty has not expired");
-        _;
-    }
-
-    modifier onlyPoster(uint256 bountyId) {
-        require(msg.sender == bounties[bountyId].poster, "Only poster can call");
-        _;
-    }
-
-    function createBounty(
-        string calldata problemStatement,
-        bytes32 answerHash,
-        uint256 deadline
-    ) external payable {
-        require(msg.value > 0, "Reward must be greater than zero");
-        require(deadline > block.timestamp, "Deadline must be in future");
+    function postBounty(bytes32 answerHash, uint256 expiresAt)
+        external
+        payable
+        returns (uint256 bountyId)
+    {
+        if (msg.value < 0.0001 ether) revert RewardTooLow();
+        if (expiresAt <= block.timestamp) revert InvalidExpiry();
 
         bountyCount += 1;
-        bounties[bountyCount] = Bounty({
-            id: bountyCount,
+        bountyId = bountyCount;
+
+        bounties[bountyId] = Bounty({
             poster: msg.sender,
-            reward: msg.value,
-            problemStatement: problemStatement,
             answerHash: answerHash,
-            deadline: deadline,
-            solver: address(0),
+            reward: msg.value,
+            expiresAt: expiresAt,
             status: BountyStatus.Open
         });
 
-        posterBounties[msg.sender].push(bountyCount);
-        emit BountyCreated(bountyCount, msg.sender, msg.value, deadline);
+        posterBounties[msg.sender].push(bountyId);
+
+        emit BountyPosted(bountyId, msg.sender, answerHash, msg.value, expiresAt);
     }
 
-    function submitAnswer(uint256 bountyId, string calldata answer) external onlyOpen(bountyId) notExpired(bountyId) {
+    function submitAnswer(uint256 bountyId, string calldata answer)
+        external
+        onlyOpen(bountyId)
+        notExpired(bountyId)
+    {
         Bounty storage bounty = bounties[bountyId];
         require(bounty.poster != address(0), "Bounty does not exist");
         require(msg.sender != bounty.poster, "Poster cannot solve own bounty");
 
         bool isCorrect = keccak256(abi.encodePacked(answer)) == bounty.answerHash;
-        emit AnswerAttempted(bountyId, msg.sender, isCorrect);
 
         if (isCorrect) {
-            bounty.status = BountyStatus.Solved;
-            bounty.solver = msg.sender;
-            solverHistory[msg.sender].push(bountyId);
+            bounty.status = BountyStatus.Paid;
 
             uint256 payout = bounty.reward;
             bounty.reward = 0;
             (bool success, ) = msg.sender.call{value: payout}("");
             require(success, "Reward payout failed");
-            emit BountySolved(bountyId, msg.sender, payout);
         }
     }
 
-    function claimRefund(uint256 bountyId) external onlyOpen(bountyId) isExpired(bountyId) onlyPoster(bountyId) {
+    function claimRefund(uint256 bountyId) external onlyOpen(bountyId) {
         Bounty storage bounty = bounties[bountyId];
-        bounty.status = BountyStatus.Expired;
+        require(block.timestamp > bounty.expiresAt, "Not yet expired");
+        require(msg.sender == bounty.poster, "Only poster can refund");
 
+        bounty.status = BountyStatus.Expired;
         uint256 refundAmount = bounty.reward;
         bounty.reward = 0;
-        bounty.status = BountyStatus.Claimed;
 
         (bool success, ) = bounty.poster.call{value: refundAmount}("");
         require(success, "Refund transfer failed");
-
-        emit BountyRefunded(bountyId, bounty.poster, refundAmount);
     }
 
     function getBounty(uint256 bountyId) external view returns (Bounty memory) {
@@ -115,9 +105,5 @@ contract MathBounty {
 
     function getMyPostedBounties() external view returns (uint256[] memory) {
         return posterBounties[msg.sender];
-    }
-
-    function getMySolvedBounties() external view returns (uint256[] memory) {
-        return solverHistory[msg.sender];
     }
 }

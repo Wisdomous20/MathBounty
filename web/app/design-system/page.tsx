@@ -313,7 +313,7 @@ export default function DesignSystemPage() {
               <Input
                 label="Bounty Title"
                 placeholder="e.g. Prove Fermat's Last"
-                className="ring-2 ring-brand ring-offset-2 ring-offset-surface"
+                className="outline-[3px] outline-brand outline-offset-[3px]"
               />
             </div>
             <div>
@@ -353,19 +353,19 @@ export default function DesignSystemPage() {
         >
           <div className="flex flex-wrap gap-4">
             <Card className="w-64">
-              <h4 className="font-display font-semibold text-ink uppercase tracking-wider">Default Card</h4>
+              <h3 className="font-display font-semibold text-ink uppercase tracking-wider">Default Card</h3>
               <p className="mt-2 text-sm text-ink-muted font-body">
                 Standard padding and border for contained content.
               </p>
             </Card>
             <Card padding="lg" className="w-64">
-              <h4 className="font-display font-semibold text-ink uppercase tracking-wider">Large Padding</h4>
+              <h3 className="font-display font-semibold text-ink uppercase tracking-wider">Large Padding</h3>
               <p className="mt-2 text-sm text-ink-muted font-body">
                 More breathing room for complex content.
               </p>
             </Card>
             <Card padding="sm" className="w-64">
-              <h4 className="font-display font-semibold text-ink uppercase tracking-wider">Small Padding</h4>
+              <h3 className="font-display font-semibold text-ink uppercase tracking-wider">Small Padding</h3>
               <p className="mt-2 text-sm text-ink-muted font-body">
                 Tight spacing for dense info.
               </p>
