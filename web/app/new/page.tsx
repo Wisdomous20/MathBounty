@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { ethers } from "ethers";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -245,6 +245,20 @@ export default function NewBountyPage() {
     const hasReward = reward && parseFloat(reward) >= parseFloat(MIN_REWARD_ETH) && rewardNum <= balanceNum;
 
     if (!hasTitle || !hasDescription || !hasAnswer || !hasReward) {
+      // Scroll to first invalid field after state update
+      requestAnimationFrame(() => {
+        const firstInvalid =
+          !hasTitle ? "title" :
+          !hasDescription ? "description" :
+          !hasAnswer ? "answer" :
+          !hasReward ? "reward" :
+          null;
+        if (firstInvalid) {
+          const el = document.getElementById(firstInvalid);
+          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+          el?.focus();
+        }
+      });
       return;
     }
 
@@ -483,6 +497,7 @@ export default function NewBountyPage() {
                           <button
                             key={opt.seconds}
                             type="button"
+                            aria-pressed={expirySeconds === opt.seconds}
                             onClick={() => setExpirySeconds(opt.seconds)}
                             className={cn(
                               "h-10 border font-mono text-[11px] uppercase tracking-wider transition-all duration-fast",
@@ -503,6 +518,8 @@ export default function NewBountyPage() {
                 <div className="border-2 border-border reveal-item">
                   <button
                     type="button"
+                    aria-expanded={showAdvanced}
+                    aria-controls="advanced-panel"
                     onClick={() => setShowAdvanced((s) => !s)}
                     className="w-full flex items-center justify-between p-4 bg-surface-sunken hover:bg-surface-raised transition-colors"
                   >
@@ -514,6 +531,7 @@ export default function NewBountyPage() {
                     </span>
                   </button>
                   <div
+                    id="advanced-panel"
                     className={cn(
                       "grid transition-all duration-normal ease-out-expo",
                       showAdvanced
@@ -533,6 +551,7 @@ export default function NewBountyPage() {
                               <button
                                 key={d}
                                 type="button"
+                                aria-pressed={difficulty === d}
                                 onClick={() => setDifficulty(d)}
                                 className={cn(
                                   "h-9 px-4 border font-mono text-[11px] uppercase tracking-wider transition-all duration-fast",
@@ -563,7 +582,7 @@ export default function NewBountyPage() {
                               {tagList.map((tag) => (
                                 <span
                                   key={tag}
-                                  className="inline-flex items-center px-2 py-0.5 border border-border text-ink-muted font-mono text-[10px] uppercase tracking-wider"
+                                  className="inline-flex items-center px-2 py-0.5 border border-border text-ink-muted font-mono text-xs uppercase tracking-wider"
                                 >
                                   {tag}
                                 </span>
@@ -594,7 +613,13 @@ export default function NewBountyPage() {
 
                 {/* ── Finality Acknowledgment ── */}
                 <div className="border-2 border-border bg-surface-raised p-6 reveal-item">
-                  <label className="flex items-start gap-3 cursor-pointer group">
+                  <label className="flex items-start gap-3 cursor-pointer group has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-surface">
+                    <input
+                      type="checkbox"
+                      checked={acknowledged}
+                      onChange={(e) => setAcknowledged(e.target.checked)}
+                      className="sr-only"
+                    />
                     <span
                       className={cn(
                         "flex h-5 w-5 shrink-0 items-center justify-center border-2 transition-all duration-fast mt-0.5",
@@ -614,12 +639,6 @@ export default function NewBountyPage() {
                         </svg>
                       )}
                     </span>
-                    <input
-                      type="checkbox"
-                      checked={acknowledged}
-                      onChange={(e) => setAcknowledged(e.target.checked)}
-                      className="sr-only"
-                    />
                     <span className="font-mono text-xs text-ink-muted uppercase tracking-[0.15em] leading-relaxed">
                       I understand this transaction is irreversible. Once
                       posted, my ETH will be locked in the bounty contract
@@ -661,7 +680,7 @@ export default function NewBountyPage() {
                 <div className="border-2 border-border bg-surface-sunken p-1 reveal-item">
                   <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-surface-raised">
                     <span className="w-1.5 h-1.5 bg-brand animate-pulse" />
-                    <span className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em]">
+                    <span className="font-mono text-xs text-ink-faint uppercase tracking-[0.2em]">
                       Live Preview
                     </span>
                   </div>
@@ -670,12 +689,12 @@ export default function NewBountyPage() {
                     {/* Preview card */}
                     <div className="relative border-2 border-border bg-surface p-5 md:p-6">
                       <div className="absolute top-4 right-4 md:top-5 md:right-5">
-                        <span className="inline-block font-mono text-[10px] font-bold uppercase tracking-[0.2em] px-2 py-1 border border-success text-success">
+                        <span className="inline-block font-mono text-xs font-bold uppercase tracking-[0.2em] px-2 py-1 border border-success text-success">
                           OPEN
                         </span>
                       </div>
 
-                      <div className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em] mb-4">
+                      <div className="font-mono text-xs text-ink-faint uppercase tracking-[0.2em] mb-4">
                         Bounty #PENDING
                       </div>
 
@@ -706,7 +725,7 @@ export default function NewBountyPage() {
 
                       <div className="flex items-end justify-between border-t-2 border-border pt-4">
                         <div>
-                          <div className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em] mb-1">
+                          <div className="font-mono text-xs text-ink-faint uppercase tracking-[0.2em] mb-1">
                             Reward
                           </div>
                           <div className="font-mono text-2xl md:text-3xl font-bold text-brand tabular-nums">
@@ -717,7 +736,7 @@ export default function NewBountyPage() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em] mb-1">
+                          <div className="font-mono text-xs text-ink-faint uppercase tracking-[0.2em] mb-1">
                             Deadline
                           </div>
                           <div className="font-mono text-sm text-ink-muted">
@@ -728,7 +747,7 @@ export default function NewBountyPage() {
 
                       {solverStake && parseFloat(solverStake) > 0 && (
                         <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
-                          <span className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em]">
+                          <span className="font-mono text-xs text-ink-faint uppercase tracking-[0.2em]">
                             Min Stake
                           </span>
                           <span className="font-mono text-sm text-ink-muted">
@@ -743,7 +762,7 @@ export default function NewBountyPage() {
                 {/* ── Transaction Readout ── */}
                 <div className="border-2 border-border bg-surface-sunken p-1 reveal-item">
                   <div className="px-3 py-2 border-b border-border bg-surface-raised">
-                    <span className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em]">
+                    <span className="font-mono text-xs text-ink-faint uppercase tracking-[0.2em]">
                       Transaction Readout
                     </span>
                   </div>
@@ -764,16 +783,14 @@ export default function NewBountyPage() {
                         -{rewardNum.toFixed(4)} ETH
                       </span>
                     </div>
-                    {gasEstimate && (
-                      <div className="flex justify-between items-baseline">
-                        <span className="text-ink-faint uppercase tracking-wider">
-                          Gas (est.)
-                        </span>
-                        <span className="text-ink-muted tabular-nums">
-                          -{parseFloat(gasEstimate).toFixed(6)} ETH
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-ink-faint uppercase tracking-wider">
+                        Gas (est.)
+                      </span>
+                      <span className={cn("tabular-nums", gasEstimate ? "text-ink-muted" : "text-ink-faint italic")}>
+                        {gasEstimate ? `-${parseFloat(gasEstimate).toFixed(6)} ETH` : "Unavailable"}
+                      </span>
+                    </div>
                     <div className="border-t border-border pt-3 flex justify-between items-baseline">
                       <span className="text-ink-faint uppercase tracking-wider">
                         Remaining
@@ -815,7 +832,7 @@ export default function NewBountyPage() {
                       ✓
                     </span>
                     <div>
-                      <div className="font-mono text-[10px] text-success uppercase tracking-[0.2em] mb-1">
+                      <div className="font-mono text-xs text-success uppercase tracking-[0.2em] mb-1">
                         Privacy Preserved
                       </div>
                       <p className="text-sm text-ink-muted leading-relaxed">

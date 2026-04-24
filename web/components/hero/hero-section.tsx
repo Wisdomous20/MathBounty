@@ -55,10 +55,10 @@ export function HeroSection() {
               <span className="text-brand">Earn</span>
               <br />
               <span className="text-brand">ETH</span>
-              <span className="text-brand animate-pulse">_</span>
+              <span className="text-brand cursor-blink">_</span>
             </h1>
 
-            <p className="reveal-item mt-12 md:mt-16 text-lg md:text-xl text-ink-muted leading-relaxed max-w-lg">
+            <p className="reveal-item mt-12 md:mt-16 text-lg md:text-xl text-ink-muted leading-relaxed max-w-[65ch]">
               A trustless marketplace for mathematical bounties. Post a problem,
               escrow ETH, and let the world&apos;s minds compete. Smart contracts
               handle escrow and payouts automatically.
@@ -89,7 +89,7 @@ export function HeroSection() {
 
       {/* Scroll indicator — more terminal-like */}
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-ink-faint">
-        <span className="font-mono text-[10px] uppercase tracking-[0.3em]">
+        <span className="font-mono text-xs uppercase tracking-[0.3em]">
           [SCROLL]
         </span>
         <div className="w-[1px] h-10 bg-ink-faint animate-pulse" />
