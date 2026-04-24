@@ -61,7 +61,7 @@ export const bountyStatus = {
   Open: {
     label: "Open",
     textColor: "text-success",
-    bgColor: "bg-success-dim",
+    bgColor: "bg-success/10",
     borderColor: "border-success",
     hex: colors.success,
     description: "Bounty is live and accepting claims",
@@ -69,7 +69,7 @@ export const bountyStatus = {
   Claimed: {
     label: "Claimed",
     textColor: "text-brand",
-    bgColor: "bg-brand-dim",
+    bgColor: "bg-brand/10",
     borderColor: "border-brand",
     hex: colors.brand,
     description: "A solver has claimed this bounty and is working on it",
@@ -77,17 +77,17 @@ export const bountyStatus = {
   Paid: {
     label: "Paid",
     textColor: "text-success",
-    bgColor: "bg-success-dim",
+    bgColor: "bg-success/10",
     borderColor: "border-success",
     hex: colors.success,
     description: "Bounty has been successfully paid out",
   },
   Expired: {
     label: "Expired",
-    textColor: "text-ink-muted",
-    bgColor: "bg-surface-sunken",
-    borderColor: "border-border",
-    hex: colors.inkMuted,
+    textColor: "text-error",
+    bgColor: "bg-error/10",
+    borderColor: "border-error",
+    hex: colors.error,
     description: "Deadline passed with no successful claim",
   },
 } as const;
@@ -147,7 +147,7 @@ export const typography = {
     },
   },
 
-  // Body — DM Sans, clean geometric sans for reading
+  // Body — Inter, clean engineering sans for reading
   body: {
     family: "var(--font-body), system-ui, sans-serif",
     weights: {
@@ -171,7 +171,7 @@ export const typography = {
 
   // Fixed rem scale for app UI (no fluid sizing in product)
   sizes: {
-    xs: "0.75rem",    // 12px
+    xs: "0.75rem",    // 12px — MINIMUM for functional text
     sm: "0.875rem",   // 14px
     base: "1rem",     // 16px
     lg: "1.125rem",   // 18px
@@ -183,6 +183,11 @@ export const typography = {
     "6xl": "4rem",    // 64px
     "7xl": "6rem",    // 96px
   },
+
+  // Accessibility: never use text smaller than 11px (0.6875rem)
+  // text-xs (12px) is the standard minimum for labels, metadata, and UI text
+  minimumSize: "0.6875rem", // 11px — absolute floor
+  minimumReadableSize: "0.75rem", // 12px — preferred minimum
 } as const;
 
 // Tailwind text size utility references
@@ -242,5 +247,8 @@ export const animation = {
     easeOut: "cubic-bezier(0.25, 0.46, 0.45, 0.94)",
     easeOutExpo: "cubic-bezier(0.19, 1, 0.22, 1)",
     easeOutQuart: "cubic-bezier(0.165, 0.84, 0.44, 1)",
+  },
+  keyframes: {
+    cursorBlink: "cursor-blink 1s step-end infinite",
   },
 } as const;
