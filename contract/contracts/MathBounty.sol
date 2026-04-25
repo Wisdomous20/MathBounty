@@ -42,6 +42,12 @@ contract MathBounty {
         uint256 reward
     );
 
+    event BountySolved(
+        uint256 indexed bountyId,
+        address indexed solver,
+        uint256 reward
+    );
+
     modifier onlyOpen(uint256 bountyId) {
         require(bounties[bountyId].status == BountyStatus.Open, "Bounty is not open");
         _;
@@ -101,6 +107,8 @@ contract MathBounty {
             bounty.reward = 0;
             (bool success, ) = msg.sender.call{value: payout}("");
             require(success, "Reward payout failed");
+
+            emit BountySolved(bountyId, msg.sender, payout);
         }
     }
 
@@ -130,6 +138,16 @@ contract MathBounty {
 
     function getBounty(uint256 bountyId) external view returns (Bounty memory) {
         return bounties[bountyId];
+    }
+
+    function getBounties(uint256[] calldata bountyIds) external view returns (Bounty[] memory) {
+        Bounty[] memory results = new Bounty[](bountyIds.length);
+
+        for (uint256 i = 0; i < bountyIds.length; i++) {
+            results[i] = bounties[bountyIds[i]];
+        }
+
+        return results;
     }
 
     function getMyPostedBounties() external view returns (uint256[] memory) {

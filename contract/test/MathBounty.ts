@@ -80,7 +80,9 @@ describe("MathBounty", function () {
 
       await contract.connect(poster).postBounty(answerHash, expiresAt, { value: reward });
 
-      await contract.connect(solver).submitAnswer(1n, "42");
+      await expect(contract.connect(solver).submitAnswer(1n, "42"))
+        .to.emit(contract, "BountySolved")
+        .withArgs(1n, solver.address, reward);
 
       const bounty = await contract.getBounty(1n);
       expect(bounty.status).to.equal(1n); // Paid
@@ -246,6 +248,36 @@ describe("MathBounty", function () {
       await expect(
         contract.connect(poster).reclaimExpired(1n)
       ).to.be.revertedWithCustomError(contract, "NotOpen");
+    });
+  });
+
+  describe("getBounties", function () {
+    it("returns multiple bounties in a single read", async function () {
+      const [poster] = await ethers.getSigners();
+      const contract = await ethers.deployContract("MathBounty");
+      const firstReward = ethers.parseEther("1");
+      const secondReward = ethers.parseEther("2");
+      const firstExpiry = await futureExpiry(3600);
+      const secondExpiry = await futureExpiry(7200);
+      const firstAnswerHash = ethers.keccak256(ethers.toUtf8Bytes("42"));
+      const secondAnswerHash = ethers.keccak256(ethers.toUtf8Bytes("84"));
+
+      await contract.connect(poster).postBounty(firstAnswerHash, firstExpiry, { value: firstReward });
+      await contract.connect(poster).postBounty(secondAnswerHash, secondExpiry, { value: secondReward });
+
+      const bounties = await contract.getBounties([1n, 2n]);
+
+      expect(bounties).to.have.lengthOf(2);
+      expect(bounties[0].poster).to.equal(poster.address);
+      expect(bounties[0].answerHash).to.equal(firstAnswerHash);
+      expect(bounties[0].reward).to.equal(firstReward);
+      expect(bounties[0].expiresAt).to.equal(firstExpiry);
+      expect(bounties[0].status).to.equal(0n);
+      expect(bounties[1].poster).to.equal(poster.address);
+      expect(bounties[1].answerHash).to.equal(secondAnswerHash);
+      expect(bounties[1].reward).to.equal(secondReward);
+      expect(bounties[1].expiresAt).to.equal(secondExpiry);
+      expect(bounties[1].status).to.equal(0n);
     });
   });
 });

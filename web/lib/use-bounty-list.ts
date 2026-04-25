@@ -1,12 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ethers } from "ethers";
 import {
   assertMathBountyContract,
   MATH_BOUNTY_ABI,
   MATH_BOUNTY_ADDRESS,
-  MATH_BOUNTY_DEPLOY_BLOCK,
 } from "@/lib/contracts";
 import { BOUNTY_STATUS } from "@/lib/bounty-state";
 import { useBountyMetadata } from "@/lib/use-bounty-metadata";
@@ -19,12 +18,16 @@ export type OpenBountyListItem = {
   title: string;
 };
 
-type BountyPostedLog = {
-  bountyId: bigint;
-};
+type BountyTuple = readonly [
+  poster: string,
+  answerHash: string,
+  reward: bigint,
+  expiresAt: bigint,
+  status: bigint
+];
 
-const BLOCK_PAGE_SIZE = 5_000;
-const REFRESH_INTERVAL_MS = 12_000;
+const BOUNTY_BATCH_SIZE = 50;
+const REFRESH_INTERVAL_MS = 45_000;
 
 function getReadProvider() {
   const win = window as unknown as { ethereum?: ethers.Eip1193Provider };
@@ -33,57 +36,23 @@ function getReadProvider() {
     : new ethers.JsonRpcProvider("https://rpc.sepolia.org");
 }
 
-async function findDeploymentBlock(provider: ethers.Provider) {
-  if (MATH_BOUNTY_DEPLOY_BLOCK > 0) {
-    return MATH_BOUNTY_DEPLOY_BLOCK;
-  }
-
-  const latest = await provider.getBlockNumber();
-  let low = 0;
-  let high = latest;
-
-  while (low < high) {
-    const mid = Math.floor((low + high) / 2);
-    const code = await provider.getCode(MATH_BOUNTY_ADDRESS, mid);
-    if (code === "0x") {
-      low = mid + 1;
-    } else {
-      high = mid;
-    }
-  }
-
-  return low;
-}
-
-async function getPostedBountyIds(
-  provider: ethers.Provider,
-  contractInterface: ethers.Interface,
-  fromBlock: number,
-  toBlock: number
-) {
-  const event = contractInterface.getEvent("BountyPosted");
-  if (!event) return [];
-
-  const topic = event.topicHash;
+function getBountyIds(count: bigint) {
   const ids: string[] = [];
+  const firstBountyId = BigInt(1);
 
-  for (let start = fromBlock; start <= toBlock; start += BLOCK_PAGE_SIZE) {
-    const end = Math.min(start + BLOCK_PAGE_SIZE - 1, toBlock);
-    const logs = await provider.getLogs({
-      address: MATH_BOUNTY_ADDRESS,
-      topics: [topic],
-      fromBlock: start,
-      toBlock: end,
-    });
-
-    for (const log of logs) {
-      const parsed = contractInterface.parseLog(log);
-      if (!parsed) continue;
-      ids.push((parsed.args[0] as BountyPostedLog["bountyId"]).toString());
-    }
+  for (let id = count; id >= firstBountyId; id -= firstBountyId) {
+    ids.push(id.toString());
   }
 
   return ids;
+}
+
+async function getBountyBatch(contract: ethers.Contract, ids: string[]) {
+  try {
+    return (await contract.getBounties(ids)) as BountyTuple[];
+  } catch {
+    return Promise.all(ids.map((id) => contract.getBounty(id) as Promise<BountyTuple>));
+  }
 }
 
 function getFallbackTitle(id: string) {
@@ -97,63 +66,91 @@ export function useBountyList(accountAddress?: string | null) {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const hasLoadedRef = useRef(false);
-
-  const contractInterface = useMemo(() => new ethers.Interface(MATH_BOUNTY_ABI), []);
+  const inFlightFetchRef = useRef<Promise<void> | null>(null);
+  const lastSuccessfulBountiesRef = useRef<OpenBountyListItem[]>([]);
 
   const fetchBounties = useCallback(async () => {
-    try {
+    if (inFlightFetchRef.current) {
+      return inFlightFetchRef.current;
+    }
+
+    const request = (async () => {
       if (!hasLoadedRef.current) {
         setLoading(true);
       }
-      const provider = getReadProvider();
-      await assertMathBountyContract(provider);
 
-      const latestBlock = await provider.getBlockNumber();
-      const deploymentBlock = await findDeploymentBlock(provider);
-      const ids = await getPostedBountyIds(
-        provider,
-        contractInterface,
-        deploymentBlock,
-        latestBlock
-      );
-      const contract = new ethers.Contract(
-        MATH_BOUNTY_ADDRESS,
-        MATH_BOUNTY_ABI,
-        provider
-      );
-      const now = Math.floor(Date.now() / 1000);
+      try {
+        const provider = getReadProvider();
+        await assertMathBountyContract(provider);
 
-      const loaded = await Promise.all(
-        ids.map(async (id) => {
-          const data = await contract.getBounty(id);
-          const status = Number(data[4]);
-          const expiresAt = data[3] as bigint;
+        const contract = new ethers.Contract(
+          MATH_BOUNTY_ADDRESS,
+          MATH_BOUNTY_ABI,
+          provider
+        );
+        const count = (await contract.bountyCount()) as bigint;
+        const ids = getBountyIds(count);
+        const now = Math.floor(Date.now() / 1000);
+        const loaded: OpenBountyListItem[] = [];
 
-          if (status !== BOUNTY_STATUS.Open || Number(expiresAt) <= now) {
-            return null;
-          }
+        for (let start = 0; start < ids.length; start += BOUNTY_BATCH_SIZE) {
+          const chunkIds = ids.slice(start, start + BOUNTY_BATCH_SIZE);
+          const chunk = await getBountyBatch(contract, chunkIds);
 
-          const metadata = getMetadata(id);
-          return {
-            id,
-            poster: data[0] as string,
-            reward: data[2] as bigint,
-            expiresAt,
-            title: metadata?.title || getFallbackTitle(id),
-          };
-        })
-      );
+          chunk.forEach((data, index) => {
+            const id = chunkIds[index];
+            const status = Number(data[4]);
+            const expiresAt = data[3];
 
-      setBounties(loaded.filter((bounty): bounty is OpenBountyListItem => bounty !== null));
-      setError(null);
-      setLastUpdatedAt(Date.now());
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load bounties");
-    } finally {
-      hasLoadedRef.current = true;
-      setLoading(false);
+            if (status !== BOUNTY_STATUS.Open || Number(expiresAt) <= now) {
+              return;
+            }
+
+            const metadata = getMetadata(id);
+            loaded.push({
+              id,
+              poster: data[0],
+              reward: data[2],
+              expiresAt,
+              title: metadata?.title || getFallbackTitle(id),
+            });
+          });
+        }
+
+        lastSuccessfulBountiesRef.current = loaded;
+        setBounties(loaded);
+        setError(null);
+        setLastUpdatedAt(Date.now());
+      } catch (err: unknown) {
+        if (lastSuccessfulBountiesRef.current.length > 0) {
+          setBounties(lastSuccessfulBountiesRef.current);
+        }
+
+        setError(err instanceof Error ? err.message : "Failed to load bounties");
+      } finally {
+        hasLoadedRef.current = true;
+        setLoading(false);
+        inFlightFetchRef.current = null;
+      }
+    })();
+
+    inFlightFetchRef.current = request;
+    return request;
+  }, [getMetadata]);
+
+  useEffect(() => {
+    return () => {
+      inFlightFetchRef.current = null;
+    };
+  }, []);
+
+  const refreshBounties = useCallback(() => {
+    if (document.visibilityState === "hidden") {
+      return;
     }
-  }, [contractInterface, getMetadata]);
+
+    void fetchBounties();
+  }, [fetchBounties]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -164,27 +161,20 @@ export function useBountyList(accountAddress?: string | null) {
   }, [accountAddress, fetchBounties]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      void fetchBounties();
-    }, REFRESH_INTERVAL_MS);
+    const interval = window.setInterval(refreshBounties, REFRESH_INTERVAL_MS);
 
     return () => window.clearInterval(interval);
-  }, [fetchBounties]);
+  }, [refreshBounties]);
 
   useEffect(() => {
-    const onFocus = () => {
-      if (document.visibilityState === "hidden") return;
-      void fetchBounties();
-    };
-
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onFocus);
+    window.addEventListener("focus", refreshBounties);
+    document.addEventListener("visibilitychange", refreshBounties);
 
     return () => {
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener("focus", refreshBounties);
+      document.removeEventListener("visibilitychange", refreshBounties);
     };
-  }, [fetchBounties]);
+  }, [refreshBounties]);
 
   return {
     bounties,

@@ -36,7 +36,9 @@ export const MATH_BOUNTY_ABI = [
   "function reclaimExpired(uint256 bountyId) external",
   "function claimRefund(uint256 bountyId) external",
   "function getBounty(uint256 bountyId) external view returns (tuple(address poster, bytes32 answerHash, uint256 reward, uint256 expiresAt, uint8 status))",
+  "function getBounties(uint256[] bountyIds) external view returns (tuple(address poster, bytes32 answerHash, uint256 reward, uint256 expiresAt, uint8 status)[])",
   "function bountyCount() external view returns (uint256)",
   "event BountyPosted(uint256 indexed bountyId, address indexed poster, bytes32 answerHash, uint256 reward, uint256 expiresAt)",
   "event BountyReclaimed(uint256 indexed bountyId, address indexed poster, uint256 reward)",
+  "event BountySolved(uint256 indexed bountyId, address indexed solver, uint256 reward)",
 ] as const;
