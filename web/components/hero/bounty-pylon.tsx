@@ -167,12 +167,12 @@ export function BountyPylon({ onNewBounty }: BountyPylonProps) {
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 z-20 border-b-2 border-border bg-surface px-3 py-2">
         <div className="flex items-center justify-between">
-          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-brand font-bold">
+          <div className="font-mono text-xs uppercase tracking-[0.2em] text-brand font-bold">
             Live Feed
           </div>
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 bg-success animate-pulse" />
-            <span className="font-mono text-[9px] text-ink-faint uppercase tracking-wider">ONLINE</span>
+            <span className="font-mono text-[11px] text-ink-faint uppercase tracking-wider">ONLINE</span>
           </div>
         </div>
       </div>

@@ -54,7 +54,7 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggleTheme}
-      className="inline-flex h-10 w-10 items-center justify-center border-2 border-border bg-surface-raised text-ink-muted transition-all duration-fast hover:border-brand hover:text-brand focus-visible:outline-[3px] focus-visible:outline-brand focus-visible:outline-offset-[3px]"
+      className="inline-flex h-10 w-10 items-center justify-center border border-border bg-surface-raised text-ink-muted transition-all duration-fast hover:border-brand hover:text-brand hover:bg-surface-sunken active:translate-y-[1px] focus-visible:outline-[3px] focus-visible:outline-brand focus-visible:outline-offset-[3px]"
       aria-label={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
       title={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
     >

@@ -9,6 +9,7 @@ import { BountyCard } from "@/components/ui/bounty-card";
 
 const navItems = [
   { id: "tokens", label: "Tokens" },
+  { id: "guidelines", label: "Guidelines" },
   { id: "button", label: "Button" },
   { id: "input", label: "Input" },
   { id: "card", label: "Card" },
@@ -203,7 +204,7 @@ export default function DesignSystemPage() {
               </div>
               <div className="p-4 border border-border bg-surface-raised">
                 <p className="text-xs text-ink-faint font-display uppercase tracking-wider mb-2">
-                  Body — DM Sans
+                  Body — Inter
                 </p>
                 <p className="text-base text-ink font-body max-w-prose">
                   MathBounty is a decentralized marketplace where anyone can post
@@ -226,6 +227,100 @@ export default function DesignSystemPage() {
                   font-mono / weights: 400, 500, 600, 700
                 </p>
               </div>
+            </div>
+          </div>
+        </Section>
+
+        <hr className="my-16 border-border" />
+
+        {/* Guidelines */}
+        <Section
+          id="guidelines"
+          title="Guidelines"
+          description="Rules and patterns that keep the UI consistent, accessible, and on-brand."
+        >
+          {/* Minimum font sizes */}
+          <div className="mb-10">
+            <h3 className="text-lg font-semibold text-ink font-display uppercase tracking-wider mb-3">
+              Minimum Font Sizes
+            </h3>
+            <div className="border border-border bg-surface-raised p-4 space-y-2">
+              <p className="text-sm text-ink-muted font-body">
+                Never use <code className="text-brand font-mono">text-[9px]</code> or <code className="text-brand font-mono">text-[10px]</code>. The absolute floor is <strong className="text-ink">11px</strong> (<code className="font-mono">text-[11px]</code>), and the preferred minimum for labels and metadata is <strong className="text-ink">12px</strong> (<code className="font-mono">text-xs</code>).
+              </p>
+              <div className="flex flex-wrap gap-3 mt-3">
+                <span className="px-2 py-1 border border-error text-error font-mono text-xs">text-[9px] — BANNED</span>
+                <span className="px-2 py-1 border border-error text-error font-mono text-xs">text-[10px] — BANNED</span>
+                <span className="px-2 py-1 border border-success text-success font-mono text-xs">text-[11px] — OK (rare)</span>
+                <span className="px-2 py-1 border border-success text-success font-mono text-xs">text-xs — PREFERRED</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Status badge color coding */}
+          <div className="mb-10">
+            <h3 className="text-lg font-semibold text-ink font-display uppercase tracking-wider mb-3">
+              Status Badge Color Coding
+            </h3>
+            <div className="border border-border bg-surface-raised p-4">
+              <p className="text-sm text-ink-muted font-body mb-3">
+                Bounty and transaction statuses must use alpha-tint backgrounds for subtlety. Never use solid dim colors.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <span className="inline-flex items-center px-2 py-1 border border-success text-success bg-success/10 font-mono text-xs uppercase tracking-wider">Open / Paid</span>
+                <span className="inline-flex items-center px-2 py-1 border border-brand text-brand bg-brand/10 font-mono text-xs uppercase tracking-wider">Claimed</span>
+                <span className="inline-flex items-center px-2 py-1 border border-error text-error bg-error/10 font-mono text-xs uppercase tracking-wider">Expired</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Custom focus pattern */}
+          <div className="mb-10">
+            <h3 className="text-lg font-semibold text-ink font-display uppercase tracking-wider mb-3">
+              Custom Focus Rings
+            </h3>
+            <div className="border border-border bg-surface-raised p-4 space-y-2">
+              <p className="text-sm text-ink-muted font-body">
+                When hiding a native input with <code className="font-mono text-brand">sr-only</code>, wrap the visual replacement in a <code className="font-mono text-brand">label</code> with <code className="font-mono text-brand">has-[:focus-visible]</code> to preserve visible focus:
+              </p>
+              <CodeBlock>{`<label className="has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand has-[:focus-visible]:ring-offset-2">
+  <input type="checkbox" className="sr-only" />
+  <span aria-hidden="true">{/* visual checkbox */}</span>
+</label>`}</CodeBlock>
+            </div>
+          </div>
+
+          {/* ARIA toggle patterns */}
+          <div className="mb-10">
+            <h3 className="text-lg font-semibold text-ink font-display uppercase tracking-wider mb-3">
+              ARIA Toggle Patterns
+            </h3>
+            <div className="border border-border bg-surface-raised p-4 space-y-2">
+              <p className="text-sm text-ink-muted font-body">
+                All button toggles must expose their state to assistive tech:
+              </p>
+              <ul className="list-disc list-inside text-sm text-ink-muted font-body space-y-1">
+                <li><strong className="text-ink">Exclusive toggles</strong> (expiry, difficulty): use <code className="font-mono text-brand">aria-pressed="true|false"</code></li>
+                <li><strong className="text-ink">Collapsible sections</strong>: use <code className="font-mono text-brand">aria-expanded="true|false"</code> + <code className="font-mono text-brand">aria-controls="panel-id"</code></li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Disabled / offline state */}
+          <div>
+            <h3 className="text-lg font-semibold text-ink font-display uppercase tracking-wider mb-3">
+              Disabled & Offline States
+            </h3>
+            <div className="border border-border bg-surface-raised p-4 space-y-2">
+              <p className="text-sm text-ink-muted font-body">
+                Never rely on <code className="font-mono text-brand">cursor-not-allowed</code> alone. Make disabled or offline elements clearly non-functional:
+              </p>
+              <div className="flex flex-wrap gap-3 mt-3">
+                <span className="text-ink-faint opacity-50 line-through font-mono text-xs">[OFFLINE] Contract</span>
+              </div>
+              <p className="text-sm text-ink-muted font-body mt-2">
+                Pattern: <code className="font-mono text-brand">opacity-50 line-through</code> + explicit <code className="font-mono text-brand">[OFFLINE]</code> prefix.
+              </p>
             </div>
           </div>
         </Section>

@@ -270,6 +270,15 @@ pre {
   50% { opacity: 0.85; }
 }
 
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.cursor-blink {
+  animation: cursor-blink 1s step-end infinite;
+}
+
 /* Staggered reveal system — sharper, heavier, more dramatic */
 .reveal-container {
   --stagger-delay: 0.12s;

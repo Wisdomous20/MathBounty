@@ -78,11 +78,11 @@ export function WalletConnectState({
     <button
       onClick={onDisconnect}
       className={cn(
-        "group inline-flex h-10 items-center gap-2 border border-success bg-success-dim px-4",
-        "text-sm font-medium text-success font-display uppercase tracking-wider",
+        "group inline-flex h-10 items-center gap-2 border border-border bg-surface-raised px-4",
+        "text-sm font-medium text-ink font-display uppercase tracking-wider",
         "transition-all duration-fast ease-out-quart",
-          "hover:border-error hover:bg-error-dim hover:text-error",
-          "focus-visible:outline-[3px] focus-visible:outline-error focus-visible:outline-offset-[3px]"
+        "hover:border-brand hover:text-brand hover:bg-surface-sunken",
+        "focus-visible:outline-[3px] focus-visible:outline-brand focus-visible:outline-offset-[3px]"
         )}
       title="Click to disconnect"
     >

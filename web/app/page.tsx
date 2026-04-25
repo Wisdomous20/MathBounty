@@ -31,7 +31,7 @@ export default function Home() {
       {/* Navigation — stark, no blur, harsh lines */}
       <header className="sticky top-0 z-50 border-b-2 border-border bg-surface">
         <div className="max-w-7xl mx-auto px-6 h-18 md:h-20 flex items-center justify-between">
-          <Link href="/" className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-ink hover:text-brand transition-colors duration-fast">
+          <Link href="/" className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-ink hover:text-brand transition-colors duration-fast glitch-hover">
             MathBounty
           </Link>
           <nav className="hidden md:flex items-center gap-12 text-sm font-bold tracking-wide text-ink-muted uppercase">
@@ -66,7 +66,7 @@ export default function Home() {
         {/* Stats Band — massive engineering readout */}
         <section className="border-y-2 border-border bg-surface-sunken relative overflow-hidden">
           {/* Section label */}
-          <div className="absolute top-0 left-0 font-mono text-[9px] text-ink-faint uppercase tracking-[0.3em] px-6 py-2">
+          <div className="absolute top-0 left-0 font-mono text-[11px] text-ink-faint uppercase tracking-[0.3em] px-6 py-2">
             SYSTEM_METRICS_v1.0
           </div>
 
@@ -80,10 +80,10 @@ export default function Home() {
               ].map((stat) => (
                 <div key={stat.label} className="reveal-item relative group" tabIndex={0}>
                   {/* Row marker */}
-                  <div className="absolute -top-6 left-0 font-mono text-[9px] text-ink-faint opacity-40">
+                  <div className="absolute -top-6 left-0 font-mono text-[11px] text-ink-faint opacity-40">
                     {stat.row}
                   </div>
-                  <div className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em] mb-3">
+                  <div className="font-mono text-xs text-ink-faint uppercase tracking-[0.2em] mb-3">
                     {stat.label}
                   </div>
                   <div className="flex items-baseline gap-3">
@@ -101,7 +101,7 @@ export default function Home() {
               ))}
             </div>
             <div className="mt-12 md:mt-16 flex items-center justify-end gap-3 reveal-item">
-              <span className="font-mono text-[9px] text-ink-faint uppercase tracking-[0.2em]">
+              <span className="font-mono text-[11px] text-ink-faint uppercase tracking-[0.2em]">
                 Example Metrics — On-chain data coming soon
               </span>
             </div>
@@ -223,13 +223,19 @@ export default function Home() {
                 >
                   {/* Status badge — top right, stamped style */}
                   <div className="absolute top-4 right-4 md:top-6 md:right-6">
-                    <span className={`inline-block font-mono text-[10px] font-bold uppercase tracking-[0.2em] px-2 py-1 border ${bounty.status === 'Open' ? 'border-success text-success' : 'border-brand text-brand'}`}>
+                    <span className={`inline-block font-mono text-xs font-bold uppercase tracking-[0.2em] px-2 py-1 border ${
+                      bounty.status === 'Open' ? 'border-success text-success bg-success/10' :
+                      bounty.status === 'Claimed' ? 'border-brand text-brand bg-brand/10' :
+                      bounty.status === 'Expired' ? 'border-error text-error bg-error/10' :
+                      bounty.status === 'Paid' ? 'border-success text-success bg-success/10' :
+                      'border-brand text-brand'
+                    }`}>
                       {bounty.status}
                     </span>
                   </div>
 
                   {/* Bounty ID — top left */}
-                  <div className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em] mb-6">
+                  <div className="font-mono text-xs text-ink-faint uppercase tracking-[0.2em] mb-6">
                     Bounty {bounty.id}
                   </div>
 
@@ -248,14 +254,14 @@ export default function Home() {
                   {/* Footer info */}
                   <div className="flex items-end justify-between border-t-2 border-border pt-4">
                     <div>
-                      <div className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em] mb-1">Reward</div>
+                      <div className="font-mono text-xs text-ink-faint uppercase tracking-[0.2em] mb-1">Reward</div>
                       <div className="font-mono text-2xl md:text-4xl font-bold text-brand tabular-nums">
                         {bounty.reward}
                         <span className="text-sm text-ink-muted ml-1">ETH</span>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em] mb-1">Deadline</div>
+                      <div className="font-mono text-xs text-ink-faint uppercase tracking-[0.2em] mb-1">Deadline</div>
                       <div className="font-mono text-sm text-ink-muted">{bounty.deadline}</div>
                     </div>
                   </div>
@@ -340,24 +346,24 @@ export default function Home() {
             <div className="flex flex-wrap gap-10 text-sm font-bold text-ink-muted uppercase tracking-wider">
               <Link href="https://github.com" target="_blank" rel="noopener noreferrer" className="hover:text-brand active:opacity-70 transition-all">GitHub</Link>
               <Link href="#docs" className="hover:text-brand active:opacity-70 transition-all">Docs</Link>
-              <span className="text-ink-faint cursor-not-allowed" aria-disabled="true">Contract</span>
+              <span className="text-ink-faint opacity-50 cursor-not-allowed line-through" aria-disabled="true">[OFFLINE] Contract</span>
             </div>
           </div>
 
           {/* Bottom line — more aggressive */}
           <div className="mt-16 pt-8 border-t-2 border-border flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex flex-wrap items-center gap-6">
-              <div className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em]">
+              <div className="font-mono text-xs text-ink-faint uppercase tracking-[0.2em]">
                 © 2026 MathBounty Protocol
               </div>
-              <div className="flex gap-6 font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em]">
+              <div className="flex gap-6 font-mono text-xs text-ink-faint uppercase tracking-[0.2em]">
                 <Link href="/privacy" className="hover:text-ink active:opacity-70 transition-all">Privacy Policy</Link>
                 <Link href="/terms" className="hover:text-ink active:opacity-70 transition-all">Terms of Service</Link>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <div className="w-2 h-2 bg-success animate-pulse" />
-              <span className="font-mono text-[10px] text-success uppercase tracking-[0.2em]">Protocol Active</span>
+              <span className="font-mono text-xs text-success uppercase tracking-[0.2em]">Protocol Active</span>
             </div>
           </div>
         </div>
