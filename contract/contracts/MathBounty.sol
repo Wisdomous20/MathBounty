@@ -18,10 +18,15 @@ contract MathBounty {
 
     error RewardTooLow();
     error InvalidExpiry();
+    error NotPoster();
+    error NotOpen();
+    error NotExpired();
+    error RefundFailed();
 
     uint256 public bountyCount;
     mapping(uint256 => Bounty) private bounties;
     mapping(address => uint256[]) private posterBounties;
+    bool private locked;
 
     event BountyPosted(
         uint256 indexed bountyId,
@@ -31,9 +36,22 @@ contract MathBounty {
         uint256 expiresAt
     );
 
+    event BountyReclaimed(
+        uint256 indexed bountyId,
+        address indexed poster,
+        uint256 reward
+    );
+
     modifier onlyOpen(uint256 bountyId) {
         require(bounties[bountyId].status == BountyStatus.Open, "Bounty is not open");
         _;
+    }
+
+    modifier nonReentrant() {
+        require(!locked, "Reentrant call");
+        locked = true;
+        _;
+        locked = false;
     }
 
     modifier notExpired(uint256 bountyId) {
@@ -86,17 +104,28 @@ contract MathBounty {
         }
     }
 
-    function claimRefund(uint256 bountyId) external onlyOpen(bountyId) {
+    function reclaimExpired(uint256 bountyId) external nonReentrant {
+        _reclaimExpired(bountyId);
+    }
+
+    function claimRefund(uint256 bountyId) external nonReentrant {
+        _reclaimExpired(bountyId);
+    }
+
+    function _reclaimExpired(uint256 bountyId) internal {
         Bounty storage bounty = bounties[bountyId];
-        require(block.timestamp > bounty.expiresAt, "Not yet expired");
-        require(msg.sender == bounty.poster, "Only poster can refund");
+        if (msg.sender != bounty.poster) revert NotPoster();
+        if (bounty.status != BountyStatus.Open) revert NotOpen();
+        if (block.timestamp <= bounty.expiresAt) revert NotExpired();
 
         bounty.status = BountyStatus.Expired;
         uint256 refundAmount = bounty.reward;
         bounty.reward = 0;
 
         (bool success, ) = bounty.poster.call{value: refundAmount}("");
-        require(success, "Refund transfer failed");
+        if (!success) revert RefundFailed();
+
+        emit BountyReclaimed(bountyId, bounty.poster, refundAmount);
     }
 
     function getBounty(uint256 bountyId) external view returns (Bounty memory) {
