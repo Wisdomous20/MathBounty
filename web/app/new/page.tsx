@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { ethers } from "ethers";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -13,7 +13,11 @@ import { Badge } from "@/components/ui/badge";
 import { WalletConnectState } from "@/components/ui/wallet-connect-state";
 import { useWallet } from "@/lib/use-wallet";
 import { useBountyMetadata } from "@/lib/use-bounty-metadata";
-import { MATH_BOUNTY_ADDRESS, MATH_BOUNTY_ABI } from "@/lib/contracts";
+import {
+  assertMathBountyContract,
+  MATH_BOUNTY_ADDRESS,
+  MATH_BOUNTY_ABI,
+} from "@/lib/contracts";
 
 /* ------------------------------------------------------------------ */
 //  Types
@@ -39,6 +43,7 @@ interface FormErrors {
 /* ------------------------------------------------------------------ */
 
 const EXPIRY_OPTIONS = [
+    { label: "1 Min", seconds: 60 },
   { label: "1 Day", seconds: 86400 },
   { label: "3 Days", seconds: 259200 },
   { label: "7 Days", seconds: 604800 },
@@ -60,6 +65,23 @@ function formatHash(hash: string | null): string {
 
 function getNowSeconds(): number {
   return Math.floor(Date.now() / 1000);
+}
+
+function getPostedBountyId(receipt: ethers.TransactionReceipt) {
+  const contractInterface = new ethers.Interface(MATH_BOUNTY_ABI);
+
+  for (const log of receipt.logs) {
+    try {
+      const parsedLog = contractInterface.parseLog(log);
+      if (parsedLog?.name === "BountyPosted") {
+        return parsedLog.args.bountyId.toString();
+      }
+    } catch {
+      // Ignore logs from other contracts in the same transaction.
+    }
+  }
+
+  throw new Error("BountyPosted event not found in transaction receipt");
 }
 
 /* ------------------------------------------------------------------ */
@@ -117,6 +139,12 @@ export default function NewBountyPage() {
     if (!signer || !answer.trim() || !reward || parseFloat(reward) <= 0) {
       return;
     }
+
+    signer.provider.getCode(MATH_BOUNTY_ADDRESS).then((bytecode) => {
+      if (bytecode === "0x") {
+        setGasEstimate(null);
+      }
+    });
 
     const contract = new ethers.Contract(
       MATH_BOUNTY_ADDRESS,
@@ -269,6 +297,7 @@ export default function NewBountyPage() {
 
     setIsPending(true);
     try {
+      await assertMathBountyContract(signer.provider);
       const contract = new ethers.Contract(
         MATH_BOUNTY_ADDRESS,
         MATH_BOUNTY_ABI,
@@ -288,8 +317,7 @@ export default function NewBountyPage() {
         throw new Error("Transaction receipt not available");
       }
 
-      const bountyCount = await contract.bountyCount();
-      const bountyId = bountyCount.toString();
+      const bountyId = getPostedBountyId(receipt);
 
       // Store off-chain metadata
       setMetadata(bountyId, {

@@ -18,10 +18,15 @@ contract MathBounty {
 
     error RewardTooLow();
     error InvalidExpiry();
+    error NotPoster();
+    error NotOpen();
+    error NotExpired();
+    error RefundFailed();
 
     uint256 public bountyCount;
     mapping(uint256 => Bounty) private bounties;
     mapping(address => uint256[]) private posterBounties;
+    bool private locked;
 
     event BountyPosted(
         uint256 indexed bountyId,
@@ -31,9 +36,28 @@ contract MathBounty {
         uint256 expiresAt
     );
 
+    event BountyReclaimed(
+        uint256 indexed bountyId,
+        address indexed poster,
+        uint256 reward
+    );
+
+    event BountySolved(
+        uint256 indexed bountyId,
+        address indexed solver,
+        uint256 reward
+    );
+
     modifier onlyOpen(uint256 bountyId) {
         require(bounties[bountyId].status == BountyStatus.Open, "Bounty is not open");
         _;
+    }
+
+    modifier nonReentrant() {
+        require(!locked, "Reentrant call");
+        locked = true;
+        _;
+        locked = false;
     }
 
     modifier notExpired(uint256 bountyId) {
@@ -83,24 +107,47 @@ contract MathBounty {
             bounty.reward = 0;
             (bool success, ) = msg.sender.call{value: payout}("");
             require(success, "Reward payout failed");
+
+            emit BountySolved(bountyId, msg.sender, payout);
         }
     }
 
-    function claimRefund(uint256 bountyId) external onlyOpen(bountyId) {
+    function reclaimExpired(uint256 bountyId) external nonReentrant {
+        _reclaimExpired(bountyId);
+    }
+
+    function claimRefund(uint256 bountyId) external nonReentrant {
+        _reclaimExpired(bountyId);
+    }
+
+    function _reclaimExpired(uint256 bountyId) internal {
         Bounty storage bounty = bounties[bountyId];
-        require(block.timestamp > bounty.expiresAt, "Not yet expired");
-        require(msg.sender == bounty.poster, "Only poster can refund");
+        if (msg.sender != bounty.poster) revert NotPoster();
+        if (bounty.status != BountyStatus.Open) revert NotOpen();
+        if (block.timestamp <= bounty.expiresAt) revert NotExpired();
 
         bounty.status = BountyStatus.Expired;
         uint256 refundAmount = bounty.reward;
         bounty.reward = 0;
 
         (bool success, ) = bounty.poster.call{value: refundAmount}("");
-        require(success, "Refund transfer failed");
+        if (!success) revert RefundFailed();
+
+        emit BountyReclaimed(bountyId, bounty.poster, refundAmount);
     }
 
     function getBounty(uint256 bountyId) external view returns (Bounty memory) {
         return bounties[bountyId];
+    }
+
+    function getBounties(uint256[] calldata bountyIds) external view returns (Bounty[] memory) {
+        Bounty[] memory results = new Bounty[](bountyIds.length);
+
+        for (uint256 i = 0; i < bountyIds.length; i++) {
+            results[i] = bounties[bountyIds[i]];
+        }
+
+        return results;
     }
 
     function getMyPostedBounties() external view returns (uint256[] memory) {

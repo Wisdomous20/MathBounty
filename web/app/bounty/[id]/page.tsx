@@ -1,14 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ethers } from "ethers";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Toast } from "@/components/ui/toast";
 import { WalletConnectState } from "@/components/ui/wallet-connect-state";
 import { useWallet } from "@/lib/use-wallet";
 import { useBountyMetadata } from "@/lib/use-bounty-metadata";
-import { MATH_BOUNTY_ADDRESS, MATH_BOUNTY_ABI } from "@/lib/contracts";
+import {
+  assertMathBountyContract,
+  MATH_BOUNTY_ADDRESS,
+  MATH_BOUNTY_ABI,
+} from "@/lib/contracts";
+import { canReclaimExpiredBounty } from "@/lib/bounty-state";
 
 type Bounty = {
   poster: string;
@@ -16,6 +23,13 @@ type Bounty = {
   reward: bigint;
   expiresAt: bigint;
   status: number;
+};
+
+type ToastState = {
+  visible: boolean;
+  variant: "success" | "error" | "info" | "warning";
+  title: string;
+  description?: string;
 };
 
 const STATUS_LABELS = ["Open", "Paid", "Expired"];
@@ -27,56 +41,161 @@ const STATUS_VARIANTS: Array<"success" | "warning" | "default"> = [
 
 export default function BountyPage() {
   const params = useParams();
-  const { state, address, connect, disconnect, switchNetwork } = useWallet();
+  const { state, address, signer, connect, disconnect, switchNetwork } = useWallet();
   const { getMetadata } = useBountyMetadata();
 
   const [bounty, setBounty] = useState<Bounty | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [nowSeconds, setNowSeconds] = useState(() => Math.floor(Date.now() / 1000));
+  const [isReclaiming, setIsReclaiming] = useState(false);
+  const [toast, setToast] = useState<ToastState>({
+    visible: false,
+    variant: "info",
+    title: "",
+  });
 
   const bountyId = params.id as string;
 
   // Load off-chain metadata synchronously during render
   const metadata = getMetadata(bountyId);
 
-  useEffect(() => {
+  const fetchBounty = useCallback(async () => {
     if (!bountyId) return;
 
-    const fetchBounty = async () => {
-      try {
-        const win = window as unknown as { ethereum?: ethers.Eip1193Provider };
-        let provider: ethers.Provider;
-        if (win.ethereum) {
-          provider = new ethers.BrowserProvider(win.ethereum);
-        } else {
-          provider = new ethers.JsonRpcProvider("https://rpc.sepolia.org");
-        }
-        const contract = new ethers.Contract(
-          MATH_BOUNTY_ADDRESS,
-          MATH_BOUNTY_ABI,
-          provider
-        );
-        const data = await contract.getBounty(bountyId);
-        setBounty({
-          poster: data[0],
-          answerHash: data[1],
-          reward: data[2],
-          expiresAt: data[3],
-          status: Number(data[4]),
-        });
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Failed to load bounty");
-      } finally {
-        setLoading(false);
+    try {
+      const win = window as unknown as { ethereum?: ethers.Eip1193Provider };
+      let provider: ethers.Provider;
+      if (win.ethereum) {
+        provider = new ethers.BrowserProvider(win.ethereum);
+      } else {
+        provider = new ethers.JsonRpcProvider("https://rpc.sepolia.org");
       }
-    };
+      await assertMathBountyContract(provider);
+      const contract = new ethers.Contract(
+        MATH_BOUNTY_ADDRESS,
+        MATH_BOUNTY_ABI,
+        provider
+      );
+      const data = await contract.getBounty(bountyId);
+      setBounty({
+        poster: data[0],
+        answerHash: data[1],
+        reward: data[2],
+        expiresAt: data[3],
+        status: Number(data[4]),
+      });
+      setError(null);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load bounty");
+    } finally {
+      setLoading(false);
+    }
+  }, [bountyId]);
 
-    fetchBounty();
-  }, [bountyId, getMetadata]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void fetchBounty();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [fetchBounty]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNowSeconds(Math.floor(Date.now() / 1000));
+    }, 30_000);
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   const expiresAtDate = bounty
     ? new Date(Number(bounty.expiresAt) * 1000)
     : null;
+  const canReclaim = canReclaimExpiredBounty(bounty, address, nowSeconds);
+
+  const hideToast = useCallback(() => {
+    setToast((current) => ({ ...current, visible: false }));
+  }, []);
+
+  const getErrorMessage = (err: unknown) => {
+    if (err instanceof Error) return err.message;
+    return "Transaction failed";
+  };
+
+  const shouldTryLegacyRefund = (err: unknown) => {
+    if (typeof err !== "object" || err === null) return false;
+
+    const candidate = err as {
+      code?: string;
+      data?: unknown;
+      message?: string;
+      shortMessage?: string;
+    };
+    const message = `${candidate.shortMessage ?? ""} ${candidate.message ?? ""}`;
+
+    return (
+      candidate.code === "CALL_EXCEPTION" &&
+      (candidate.data === null || candidate.data === undefined) &&
+      message.toLowerCase().includes("missing revert data")
+    );
+  };
+
+  const sendReclaimTransaction = async (contract: ethers.Contract) => {
+    try {
+      return await contract.reclaimExpired(bountyId);
+    } catch (err: unknown) {
+      if (!shouldTryLegacyRefund(err)) {
+        throw err;
+      }
+
+      return await contract.claimRefund(bountyId);
+    }
+  };
+
+  const handleReclaim = async () => {
+    if (!signer || !bounty) return;
+
+    setIsReclaiming(true);
+    setToast({
+      visible: true,
+      variant: "info",
+      title: "Reclaim pending",
+      description: "Confirm the transaction in your wallet.",
+    });
+
+    try {
+      const contract = new ethers.Contract(
+        MATH_BOUNTY_ADDRESS,
+        MATH_BOUNTY_ABI,
+        signer
+      );
+      const tx = await sendReclaimTransaction(contract);
+      setToast({
+        visible: true,
+        variant: "info",
+        title: "Reclaim submitted",
+        description: "Waiting for Sepolia confirmation.",
+      });
+      await tx.wait();
+      await fetchBounty();
+      setToast({
+        visible: true,
+        variant: "success",
+        title: "Escrow reclaimed",
+        description: `${ethers.formatEther(bounty.reward)} ETH returned to the poster wallet.`,
+      });
+    } catch (err: unknown) {
+      setToast({
+        visible: true,
+        variant: "error",
+        title: "Reclaim failed",
+        description: getErrorMessage(err),
+      });
+    } finally {
+      setIsReclaiming(false);
+    }
+  };
 
   return (
     <main className="flex min-h-screen flex-col bg-surface">
@@ -298,6 +417,29 @@ export default function BountyPage() {
                   </div>
                 )}
 
+                {canReclaim && (
+                  <div className="border-2 border-brand p-6 bg-surface">
+                    <div className="font-mono text-[10px] text-brand uppercase tracking-[0.2em] mb-3">
+                      Poster Action
+                    </div>
+                    <h3 className="font-display font-bold text-ink text-xl mb-3">
+                      RECLAIM EXPIRED ESCROW
+                    </h3>
+                    <p className="text-sm text-ink-muted mb-6 leading-relaxed">
+                      This bounty is strictly past its deadline. Reclaim the full
+                      escrowed reward back to your poster wallet.
+                    </p>
+                    <Button
+                      type="button"
+                      className="w-full"
+                      isLoading={isReclaiming}
+                      onClick={handleReclaim}
+                    >
+                      Reclaim escrow
+                    </Button>
+                  </div>
+                )}
+
                 {/* CTA */}
                 <div className="border-2 border-brand p-6 bg-surface">
                   <h3 className="font-display font-bold text-ink text-xl mb-3">
@@ -315,6 +457,16 @@ export default function BountyPage() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="fixed top-20 right-4 z-50 w-full max-w-sm">
+        <Toast
+          visible={toast.visible}
+          variant={toast.variant}
+          title={toast.title}
+          description={toast.description}
+          onDismiss={hideToast}
+        />
       </div>
     </main>
   );
