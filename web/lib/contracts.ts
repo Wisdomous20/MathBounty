@@ -3,6 +3,10 @@ export const MATH_BOUNTY_ADDRESS = (
   "0x0000000000000000000000000000000000000000"
 ) as `0x${string}`;
 
+export const MATH_BOUNTY_DEPLOY_BLOCK = Number(
+  process.env.NEXT_PUBLIC_MATH_BOUNTY_DEPLOY_BLOCK ?? "0"
+);
+
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 export function hasConfiguredMathBountyAddress() {
