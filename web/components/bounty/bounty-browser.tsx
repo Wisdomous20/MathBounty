@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toast } from "@/components/ui/toast";
 import { WalletConnectState } from "@/components/ui/wallet-connect-state";
+import { ConnectWalletPrompt } from "@/components/ui/connect-wallet-prompt";
 import { useBountyList } from "@/lib/use-bounty-list";
 import { useWallet } from "@/lib/use-wallet";
 
@@ -56,11 +57,11 @@ export function BountyBrowser() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setShowErrorToast(Boolean(error));
+      setShowErrorToast(Boolean(error) && state === "connected");
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [error]);
+  }, [error, state]);
 
   const handleConnect = async () => {
     const connected = await connect();
@@ -85,12 +86,22 @@ export function BountyBrowser() {
             MathBounty
           </Link>
           <div className="flex items-center gap-3">
-            <Link
-              href="/new"
-              className="hidden sm:inline-flex items-center justify-center px-5 py-3 text-xs font-bold tracking-widest uppercase bg-brand text-surface hover:bg-brand-dim active:translate-y-[1px] transition-all duration-normal"
-            >
-              Post Bounty
-            </Link>
+            {state === "connected" && (
+              <>
+                <Link
+                  href="/me/posts"
+                  className="hidden sm:inline-flex items-center justify-center px-5 py-3 text-xs font-bold tracking-widest uppercase bg-surface-raised border border-border text-ink hover:border-brand hover:text-brand active:translate-y-[1px] transition-all duration-normal"
+                >
+                  My Dashboard
+                </Link>
+                <Link
+                  href="/new"
+                  className="hidden sm:inline-flex items-center justify-center px-5 py-3 text-xs font-bold tracking-widest uppercase bg-brand text-surface hover:bg-brand-dim active:translate-y-[1px] transition-all duration-normal"
+                >
+                  Post Bounty
+                </Link>
+              </>
+            )}
             <ThemeToggle />
             <WalletConnectState
               state={state}
@@ -119,60 +130,73 @@ export function BountyBrowser() {
                 Bounties
               </h1>
             </div>
-            <div className="border-2 border-border bg-surface-raised p-5">
-              <div className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em] mb-2">
-                Chain Status
+            {state === "connected" && (
+              <div className="border-2 border-border bg-surface-raised p-5">
+                <div className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em] mb-2">
+                  Chain Status
+                </div>
+                <div className="font-mono text-sm text-ink-muted">
+                  {lastUpdatedAt
+                    ? `Updated ${new Date(lastUpdatedAt).toLocaleTimeString()}`
+                    : "Waiting for first sync"}
+                </div>
+                <div className="mt-4">
+                  <Button variant="secondary" size="sm" onClick={() => void retry()}>
+                    Retry
+                  </Button>
+                </div>
               </div>
-              <div className="font-mono text-sm text-ink-muted">
-                {lastUpdatedAt
-                  ? `Updated ${new Date(lastUpdatedAt).toLocaleTimeString()}`
-                  : "Waiting for first sync"}
-              </div>
-              <div className="mt-4">
-                <Button variant="secondary" size="sm" onClick={() => void retry()}>
-                  Retry
-                </Button>
-              </div>
-            </div>
+            )}
           </div>
 
-          {loading && <BountyGridSkeleton />}
-
-          {!loading && error && (
-            <div className="border-2 border-error bg-surface-raised p-8">
-              <div className="font-mono text-xs text-error uppercase tracking-[0.2em] mb-3">
-                RPC Fetch Failed
-              </div>
-              <p className="text-ink-muted mb-6">{error}</p>
-              <Button type="button" onClick={() => void retry()}>
-                Retry
-              </Button>
+          {state !== "connected" ? (
+            <div className="max-w-2xl mx-auto">
+              <ConnectWalletPrompt 
+                title="Connect Wallet to Browse"
+                description="MathBounty uses the Sepolia testnet. Connect your wallet to view open bounties, submit solutions, and track your progress."
+              />
             </div>
-          )}
+          ) : (
+            <>
+              {loading && <BountyGridSkeleton />}
 
-          {!loading && !error && bounties.length === 0 && (
-            <EmptyState
-              title="No open bounties yet - be the first to post one"
-              actionHref="/new"
-              actionLabel="Post a bounty"
-            />
-          )}
+              {!loading && error && (
+                <div className="border-2 border-error bg-surface-raised p-8">
+                  <div className="font-mono text-xs text-error uppercase tracking-[0.2em] mb-3">
+                    RPC Fetch Failed
+                  </div>
+                  <p className="text-ink-muted mb-6">{error}</p>
+                  <Button type="button" onClick={() => void retry()}>
+                    Retry
+                  </Button>
+                </div>
+              )}
 
-          {!loading && !error && bounties.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {bounties.map((bounty) => (
-                <Link key={bounty.id} href={`/bounty/${bounty.id}`} className="block">
-                  <BountyCard
-                    status="Open"
-                    title={bounty.title}
-                    reward={formatReward(bounty.reward)}
-                    deadline={formatCountdown(bounty.expiresAt, nowSeconds)}
-                    proposer={bounty.poster}
-                    className="h-full border-2 hover:border-brand"
-                  />
-                </Link>
-              ))}
-            </div>
+              {!loading && !error && bounties.length === 0 && (
+                <EmptyState
+                  title="No open bounties yet - be the first to post one"
+                  actionHref="/new"
+                  actionLabel="Post a bounty"
+                />
+              )}
+
+              {!loading && !error && bounties.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {bounties.map((bounty) => (
+                    <Link key={bounty.id} href={`/bounty/${bounty.id}`} className="block">
+                      <BountyCard
+                        status="Open"
+                        title={bounty.title}
+                        reward={formatReward(bounty.reward)}
+                        deadline={formatCountdown(bounty.expiresAt, nowSeconds)}
+                        proposer={bounty.poster}
+                        className="h-full border-2 hover:border-brand"
+                      />
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </section>
       </main>

@@ -34,6 +34,12 @@ export default function MeLayout({
           </Link>
           <div className="flex items-center gap-3">
             <Link
+              href="/bounties"
+              className="hidden sm:inline-flex items-center justify-center px-5 py-3 text-xs font-bold tracking-widest uppercase bg-surface-raised border border-border text-ink hover:border-brand hover:text-brand active:translate-y-[1px] transition-all duration-normal"
+            >
+              Browse Bounties
+            </Link>
+            <Link
               href="/new"
               className="hidden sm:inline-flex items-center justify-center px-5 py-3 text-xs font-bold tracking-widest uppercase bg-brand text-surface hover:bg-brand-dim active:translate-y-[1px] transition-all duration-normal"
             >
