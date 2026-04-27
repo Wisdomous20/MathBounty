@@ -7,15 +7,17 @@ import { useWallet } from "@/lib/use-wallet";
 import { Tabs } from "@/components/ui/tabs";
 import { useUserBounties } from "@/lib/use-user-bounties";
 import { useUserSolves } from "@/lib/use-user-solves";
+import { useBalance } from "@/lib/use-balance";
 
 export default function MeLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { state, address, connect, disconnect, switchNetwork } = useWallet();
+  const { state, address, provider, connect, disconnect, switchNetwork } = useWallet();
   const { bounties } = useUserBounties(address);
   const { solves } = useUserSolves(address);
+  const { balance, loading: balanceLoading } = useBalance(address, provider);
 
   const tabs = [
     { label: "My Posts", href: "/me/posts", count: address ? bounties.length : undefined },
@@ -59,21 +61,43 @@ export default function MeLayout({
 
       <main className="flex-1">
         <div className="max-w-7xl mx-auto px-6 py-12 md:py-16">
-          <div className="mb-12">
-            <div className="font-mono text-xs text-brand uppercase tracking-[0.3em] mb-4">
-              Accountability Dashboard
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 mb-12">
+            <div>
+              <div className="font-mono text-xs text-brand uppercase tracking-[0.3em] mb-4">
+                Accountability Dashboard
+              </div>
+              <h1
+                className="font-display font-bold text-ink leading-[0.85] tracking-tight"
+                style={{ fontSize: "clamp(3rem, 10vw, 6rem)" }}
+              >
+                Personal
+                <br />
+                Dashboard
+              </h1>
             </div>
-            <h1
-              className="font-display font-bold text-ink leading-[0.85] tracking-tight mb-8"
-              style={{ fontSize: "clamp(3rem, 10vw, 6rem)" }}
-            >
-              Personal
-              <br />
-              Dashboard
-            </h1>
-            
-            <Tabs items={tabs} className="mt-8" />
+
+            {address && (
+              <div className="border-2 border-border bg-surface-raised p-6 md:p-8 lg:min-w-[240px] animate-in fade-in slide-in-from-right-4 duration-slow">
+                <div className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em] mb-2">
+                  Wallet Balance
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="font-display text-4xl md:text-5xl font-bold text-ink">
+                    {balanceLoading && !balance ? "..." : balance}
+                  </span>
+                  <span className="font-mono text-sm text-brand font-bold uppercase">ETH</span>
+                </div>
+                <div className="mt-4 flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                  <span className="font-mono text-[10px] text-ink-muted uppercase tracking-widest">
+                    Sepolia Live
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
+          
+          <Tabs items={tabs} className="mt-8" />
 
           {children}
         </div>
