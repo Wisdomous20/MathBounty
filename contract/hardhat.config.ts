@@ -3,7 +3,8 @@ import hardhatToolboxMochaEthersPlugin from "@nomicfoundation/hardhat-toolbox-mo
 import { defineConfig } from "hardhat/config";
 
 const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL ?? "";
-const SEPOLIA_PRIVATE_KEY = process.env.SEPOLIA_PRIVATE_KEY ?? "";
+const SEPOLIA_PRIVATE_KEY =
+  process.env.SEPOLIA_PRIVATE_KEY ?? process.env.PRIVATE_KEY ?? "";
 
 export default defineConfig({
   plugins: [hardhatToolboxMochaEthersPlugin],

@@ -80,9 +80,18 @@ describe("MathBounty", function () {
 
       await contract.connect(poster).postBounty(answerHash, expiresAt, { value: reward });
 
-      await expect(contract.connect(solver).submitAnswer(1n, "42"))
+      const solverBalanceBefore = await ethers.provider.getBalance(solver.address);
+      const solveTx = await contract.connect(solver).submitAnswer(1n, "42");
+
+      await expect(solveTx)
         .to.emit(contract, "BountySolved")
         .withArgs(1n, solver.address, reward);
+      const solveReceipt = await solveTx.wait();
+      if (!solveReceipt) throw new Error("No solve receipt");
+      const solverBalanceAfter = await ethers.provider.getBalance(solver.address);
+
+      const gasCost = solveReceipt.gasUsed * solveReceipt.gasPrice;
+      expect(solverBalanceAfter - solverBalanceBefore).to.equal(reward - gasCost);
 
       const bounty = await contract.getBounty(1n);
       expect(bounty.status).to.equal(1n); // Paid
@@ -98,10 +107,9 @@ describe("MathBounty", function () {
 
       await contract.connect(poster).postBounty(answerHash, expiresAt, { value: reward });
 
-      await contract.connect(solver).submitAnswer(1n, "43");
-
-      const bounty = await contract.getBounty(1n);
-      expect(bounty.status).to.equal(0n); // Still Open
+      await expect(
+        contract.connect(solver).submitAnswer(1n, "43")
+      ).to.be.revertedWithCustomError(contract, "InvalidAnswer");
     });
 
     it("reverts when poster tries to solve own bounty", async function () {
@@ -115,7 +123,38 @@ describe("MathBounty", function () {
 
       await expect(
         contract.connect(poster).submitAnswer(1n, "42")
-      ).to.be.revertedWith("Poster cannot solve own bounty");
+      ).to.be.revertedWithCustomError(contract, "SelfSolveForbidden");
+    });
+
+    it("reverts when submitting after expiry", async function () {
+      const [poster, solver] = await ethers.getSigners();
+      const contract = await ethers.deployContract("MathBounty");
+      const reward = ethers.parseEther("1");
+      const expiresAt = await futureExpiry(120);
+      const answerHash = ethers.keccak256(ethers.toUtf8Bytes("42"));
+
+      await contract.connect(poster).postBounty(answerHash, expiresAt, { value: reward });
+      await ethers.provider.send("evm_increaseTime", [121]);
+      await ethers.provider.send("evm_mine");
+
+      await expect(
+        contract.connect(solver).submitAnswer(1n, "42")
+      ).to.be.revertedWithCustomError(contract, "Expired");
+    });
+
+    it("reverts when trying to solve an already paid bounty", async function () {
+      const [poster, solver, anotherSolver] = await ethers.getSigners();
+      const contract = await ethers.deployContract("MathBounty");
+      const reward = ethers.parseEther("1");
+      const expiresAt = await futureExpiry(3600);
+      const answerHash = ethers.keccak256(ethers.toUtf8Bytes("42"));
+
+      await contract.connect(poster).postBounty(answerHash, expiresAt, { value: reward });
+      await contract.connect(solver).submitAnswer(1n, "42");
+
+      await expect(
+        contract.connect(anotherSolver).submitAnswer(1n, "42")
+      ).to.be.revertedWithCustomError(contract, "NotOpen");
     });
   });
 
