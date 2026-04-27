@@ -123,7 +123,7 @@ export function BountyBrowser() {
               </div>
               <h1
                 className="font-display font-bold text-ink leading-[0.85] tracking-tight"
-                style={{ fontSize: "clamp(4rem, 12vw, 10rem)" }}
+                style={{ fontSize: "clamp(3rem, 10vw, 6rem)" }}
               >
                 Open
                 <br />
