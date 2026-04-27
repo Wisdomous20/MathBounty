@@ -1,28 +1,39 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { ethers } from "ethers";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Input } from "@/components/ui/input";
 import { Toast } from "@/components/ui/toast";
 import { WalletConnectState } from "@/components/ui/wallet-connect-state";
-import { useWallet } from "@/lib/use-wallet";
-import { useBountyMetadata } from "@/lib/use-bounty-metadata";
+import { BOUNTY_STATUS } from "@/lib/bounty-state";
 import {
   assertMathBountyContract,
-  MATH_BOUNTY_ADDRESS,
   MATH_BOUNTY_ABI,
+  MATH_BOUNTY_ADDRESS,
+  MATH_BOUNTY_DEPLOY_BLOCK,
 } from "@/lib/contracts";
-import { canReclaimExpiredBounty } from "@/lib/bounty-state";
+import { decodeContractError } from "@/lib/decode-revert";
+import { getReadProvider } from "@/lib/read-provider";
+import { useBountyMetadata } from "@/lib/use-bounty-metadata";
+import { useWallet } from "@/lib/use-wallet";
 
-type Bounty = {
-  poster: string;
-  answerHash: string;
-  reward: bigint;
-  expiresAt: bigint;
-  status: number;
+type BountyTuple = readonly [
+  poster: string,
+  answerHash: string,
+  reward: bigint,
+  expiresAt: bigint,
+  status: bigint
+];
+
+type Outcome = {
+  solver: string;
+  txHash: string;
 };
 
 type ToastState = {
@@ -32,62 +43,97 @@ type ToastState = {
   description?: string;
 };
 
-const STATUS_LABELS = ["Open", "Paid", "Expired"];
-const STATUS_VARIANTS: Array<"success" | "warning" | "default"> = [
-  "success",
-  "warning",
-  "default",
-];
+function truncateAddress(value: string) {
+  if (!value) return "—";
+  return `${value.slice(0, 6)}…${value.slice(-4)}`;
+}
 
-export default function BountyPage() {
+function formatReward(reward: bigint) {
+  return `${Number(ethers.formatEther(reward)).toFixed(4)} ETH`;
+}
+
+function formatRemaining(remainingSeconds: number) {
+  if (remainingSeconds <= 0) return "EXPIRED";
+  if (remainingSeconds >= 86_400) {
+    const days = Math.floor(remainingSeconds / 86_400);
+    const hours = Math.floor((remainingSeconds % 86_400) / 3600);
+    const mins = Math.floor((remainingSeconds % 3600) / 60);
+    return `${days}d ${String(hours).padStart(2, "0")}h ${String(mins).padStart(2, "0")}m`;
+  }
+
+  const hours = Math.floor(remainingSeconds / 3600);
+  const mins = Math.floor((remainingSeconds % 3600) / 60);
+  const secs = remainingSeconds % 60;
+  return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+export default function BountyDetailPage() {
   const params = useParams();
-  const { state, address, signer, connect, disconnect, switchNetwork } = useWallet();
+  const idParam = params?.id;
+  const bountyId = Array.isArray(idParam) ? idParam[0] : idParam;
   const { getMetadata } = useBountyMetadata();
-
-  const [bounty, setBounty] = useState<Bounty | null>(null);
+  const { state, address, signer, connect, disconnect, switchNetwork } = useWallet();
+  const [bounty, setBounty] = useState<BountyTuple | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [answer, setAnswer] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [nowSeconds, setNowSeconds] = useState(() => Math.floor(Date.now() / 1000));
-  const [isReclaiming, setIsReclaiming] = useState(false);
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [toast, setToast] = useState<ToastState>({
     visible: false,
     variant: "info",
     title: "",
   });
 
-  const bountyId = params.id as string;
+  const showToast = useCallback((next: Omit<ToastState, "visible">) => {
+    setToast({ visible: true, ...next });
+  }, []);
 
-  // Load off-chain metadata synchronously during render
-  const metadata = getMetadata(bountyId);
+  const loadBounty = useCallback(async () => {
+    if (!bountyId || Number.isNaN(Number(bountyId))) {
+      setError("Invalid bounty id.");
+      setLoading(false);
+      return;
+    }
 
-  const fetchBounty = useCallback(async () => {
-    if (!bountyId) return;
-
+    setLoading(true);
     try {
-      const win = window as unknown as { ethereum?: ethers.Eip1193Provider };
-      let provider: ethers.Provider;
-      if (win.ethereum) {
-        provider = new ethers.BrowserProvider(win.ethereum);
-      } else {
-        provider = new ethers.JsonRpcProvider("https://rpc.sepolia.org");
-      }
+      const provider = getReadProvider();
       await assertMathBountyContract(provider);
       const contract = new ethers.Contract(
         MATH_BOUNTY_ADDRESS,
         MATH_BOUNTY_ABI,
         provider
       );
-      const data = await contract.getBounty(bountyId);
-      setBounty({
-        poster: data[0],
-        answerHash: data[1],
-        reward: data[2],
-        expiresAt: data[3],
-        status: Number(data[4]),
-      });
+      const data = (await contract.getBounty(bountyId)) as BountyTuple;
+      if (data[0] === ethers.ZeroAddress) {
+        setBounty(null);
+        setOutcome(null);
+        setError("No on-chain record found for this bounty.");
+        setLoading(false);
+        return;
+      }
+
+      setBounty(data);
       setError(null);
+
+      const chainBountyId = BigInt(bountyId);
+      const solvedEvents = await contract.queryFilter(
+        contract.filters.BountySolved(chainBountyId),
+        MATH_BOUNTY_DEPLOY_BLOCK || 0
+      );
+      const latestSolved = solvedEvents.at(-1);
+      if (latestSolved && "args" in latestSolved) {
+        setOutcome({
+          solver: latestSolved.args.solver as string,
+          txHash: latestSolved.transactionHash,
+        });
+      } else {
+        setOutcome(null);
+      }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load bounty");
+      setError(err instanceof Error ? err.message : "Failed to load bounty.");
     } finally {
       setLoading(false);
     }
@@ -95,111 +141,119 @@ export default function BountyPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void fetchBounty();
+      void loadBounty();
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [fetchBounty]);
+  }, [loadBounty]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
       setNowSeconds(Math.floor(Date.now() / 1000));
-    }, 30_000);
+    }, 1000);
 
     return () => window.clearInterval(timer);
   }, []);
 
-  const expiresAtDate = bounty
-    ? new Date(Number(bounty.expiresAt) * 1000)
+  const metadata = useMemo(() => {
+    if (!bountyId) return null;
+    return getMetadata(bountyId);
+  }, [bountyId, getMetadata]);
+
+  const expiresAt = bounty ? Number(bounty[3]) : 0;
+  const isExpiredByClock = bounty ? nowSeconds > expiresAt : false;
+  const statusNumber = bounty ? Number(bounty[4]) : BOUNTY_STATUS.Expired;
+  const isOpen = statusNumber === BOUNTY_STATUS.Open;
+  const isPoster = bounty && address ? bounty[0].toLowerCase() === address.toLowerCase() : false;
+  const canSubmit = Boolean(
+    bounty &&
+      isOpen &&
+      !isExpiredByClock &&
+      state === "connected" &&
+      !isPoster &&
+      answer.trim().length > 0
+  );
+
+  const remaining = Math.max(0, expiresAt - nowSeconds);
+  const countdownLabel = formatRemaining(remaining);
+  const answerHashPreview = answer.trim()
+    ? ethers.keccak256(ethers.toUtf8Bytes(answer.trim()))
     : null;
-  const canReclaim = canReclaimExpiredBounty(bounty, address, nowSeconds);
 
-  const hideToast = useCallback(() => {
-    setToast((current) => ({ ...current, visible: false }));
-  }, []);
-
-  const getErrorMessage = (err: unknown) => {
-    if (err instanceof Error) return err.message;
-    return "Transaction failed";
-  };
-
-  const shouldTryLegacyRefund = (err: unknown) => {
-    if (typeof err !== "object" || err === null) return false;
-
-    const candidate = err as {
-      code?: string;
-      data?: unknown;
-      message?: string;
-      shortMessage?: string;
-    };
-    const message = `${candidate.shortMessage ?? ""} ${candidate.message ?? ""}`;
-
-    return (
-      candidate.code === "CALL_EXCEPTION" &&
-      (candidate.data === null || candidate.data === undefined) &&
-      message.toLowerCase().includes("missing revert data")
-    );
-  };
-
-  const sendReclaimTransaction = async (contract: ethers.Contract) => {
-    try {
-      return await contract.reclaimExpired(bountyId);
-    } catch (err: unknown) {
-      if (!shouldTryLegacyRefund(err)) {
-        throw err;
-      }
-
-      return await contract.claimRefund(bountyId);
+  const statusUi = (() => {
+    if (!bounty) return { label: "Unknown", variant: "default" as const };
+    if (statusNumber === BOUNTY_STATUS.Paid) {
+      return { label: "Paid", variant: "warning" as const };
     }
-  };
+    if (statusNumber === BOUNTY_STATUS.Expired || isExpiredByClock) {
+      return { label: "Expired", variant: "default" as const };
+    }
+    return { label: "Open", variant: "success" as const };
+  })();
 
-  const handleReclaim = async () => {
-    if (!signer || !bounty) return;
+  const submitAnswer = async () => {
+    if (!signer || !bountyId) return;
+    const cleaned = answer.trim();
+    if (!cleaned) return;
 
-    setIsReclaiming(true);
-    setToast({
-      visible: true,
+    setSubmitting(true);
+    showToast({
       variant: "info",
-      title: "Reclaim pending",
-      description: "Confirm the transaction in your wallet.",
+      title: "Submitting",
+      description: "Waiting for wallet signature and chain confirmation.",
     });
 
     try {
-      const contract = new ethers.Contract(
-        MATH_BOUNTY_ADDRESS,
-        MATH_BOUNTY_ABI,
-        signer
-      );
-      const tx = await sendReclaimTransaction(contract);
-      setToast({
-        visible: true,
-        variant: "info",
-        title: "Reclaim submitted",
-        description: "Waiting for Sepolia confirmation.",
-      });
-      await tx.wait();
-      await fetchBounty();
-      setToast({
-        visible: true,
+      await assertMathBountyContract(signer.provider);
+      const contract = new ethers.Contract(MATH_BOUNTY_ADDRESS, MATH_BOUNTY_ABI, signer);
+      const tx = await contract.submitAnswer(BigInt(bountyId), cleaned);
+      const receipt = await tx.wait();
+      const payout = bounty ? formatReward(bounty[2]) : "0 ETH";
+      showToast({
         variant: "success",
-        title: "Escrow reclaimed",
-        description: `${ethers.formatEther(bounty.reward)} ETH returned to the poster wallet.`,
+        title: "Reward Claimed",
+        description: `${payout} received. Tx: ${receipt?.hash ?? tx.hash}`,
       });
+      setAnswer("");
+      await loadBounty();
     } catch (err: unknown) {
-      setToast({
-        visible: true,
-        variant: "error",
-        title: "Reclaim failed",
-        description: getErrorMessage(err),
+      const decoded = decodeContractError(err);
+      showToast({
+        variant: decoded.variant,
+        title: decoded.title,
+        description: decoded.description,
       });
     } finally {
-      setIsReclaiming(false);
+      setSubmitting(false);
     }
   };
 
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-surface text-ink p-6">
+        <div className="max-w-7xl mx-auto border-2 border-border bg-surface-raised p-10 font-mono text-sm uppercase tracking-[0.2em] text-ink-faint">
+          Loading bounty...
+        </div>
+      </main>
+    );
+  }
+
+  if (!bounty || error) {
+    return (
+      <main className="min-h-screen bg-surface text-ink p-6">
+        <div className="max-w-7xl mx-auto">
+          <EmptyState
+            title={error ?? "No on-chain record found for this bounty."}
+            actionHref="/bounties"
+            actionLabel="Back to bounties"
+          />
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <main className="flex min-h-screen flex-col bg-surface">
-      {/* ── Header ── */}
+    <div className="flex min-h-screen flex-col bg-surface text-ink">
       <header className="sticky top-0 z-50 border-b-2 border-border bg-surface">
         <div className="max-w-7xl mx-auto px-6 h-[72px] md:h-20 flex items-center justify-between">
           <Link
@@ -208,256 +262,164 @@ export default function BountyPage() {
           >
             MathBounty
           </Link>
-          <WalletConnectState
-            state={state}
-            address={address ?? undefined}
-            onConnect={connect}
-            onDisconnect={disconnect}
-            onSwitchNetwork={switchNetwork}
-          />
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <WalletConnectState
+              state={state}
+              address={address ?? undefined}
+              onConnect={connect}
+              onDisconnect={disconnect}
+              onSwitchNetwork={switchNetwork}
+            />
+          </div>
         </div>
       </header>
 
-      {/* ── Content ── */}
-      <div className="flex-1">
-        <div className="max-w-7xl mx-auto px-6 py-12 md:py-20">
-          {loading && (
-            <div className="border-2 border-border bg-surface-raised p-12">
-              <div className="font-mono text-xs text-ink-faint uppercase tracking-[0.3em] animate-pulse">
-                Loading bounty data from chain…
+      <main className="flex-1 reveal-container">
+        <section className="max-w-7xl mx-auto px-6 py-12 md:py-16 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
+          <div className="lg:col-span-7 space-y-6">
+            <div className="border-2 border-border bg-surface-raised p-6 md:p-8 reveal-item">
+              <div className="font-mono text-xs text-brand uppercase tracking-[0.3em] mb-4">
+                Bounty #{bountyId}
               </div>
-            </div>
-          )}
-
-          {error && (
-            <div className="border-2 border-error bg-surface-raised p-12">
-              <div className="font-mono text-xs text-error uppercase tracking-[0.3em] mb-4">
-                Error
-              </div>
-              <p className="text-lg text-ink">{error}</p>
-            </div>
-          )}
-
-          {!loading && !error && !bounty && (
-            <div className="border-2 border-border bg-surface-raised p-12 text-center">
-              <div
-                className="font-display font-bold text-ink opacity-[0.04] leading-none select-none pointer-events-none mb-6"
-                style={{ fontSize: "clamp(6rem, 15vw, 12rem)" }}
+              <h1
+                className="font-display font-bold text-ink leading-[0.9] tracking-tight uppercase"
+                style={{ fontSize: "clamp(2.5rem, 6vw, 5rem)" }}
               >
-                404
+                {metadata?.title || `Bounty #${bountyId}`}
+              </h1>
+              <p className="mt-4 max-w-[72ch] text-ink-muted">
+                {metadata?.description || "On-chain bounty, solve correctly to receive the escrowed reward."}
+              </p>
+              <div className="mt-6 flex flex-wrap gap-2">
+                <Badge variant={statusUi.variant}>{statusUi.label}</Badge>
+                {(metadata?.tags ?? []).map((tag) => (
+                  <Badge key={tag} variant="default">
+                    {tag}
+                  </Badge>
+                ))}
               </div>
-              <p className="text-lg text-ink-muted mb-6">Bounty not found</p>
-              <Link
-                href="/"
-                className="inline-flex items-center justify-center px-8 py-3 text-sm font-bold tracking-widest uppercase bg-brand text-surface hover:bg-brand-dim active:translate-y-[1px] transition-all duration-normal"
-              >
-                Return Home
-              </Link>
             </div>
-          )}
 
-          {bounty && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16">
-              {/* ═══════════════ LEFT: Main info ═══════════════ */}
-              <div className="lg:col-span-8 space-y-8">
-                {/* Title block */}
-                <div className="border-2 border-border bg-surface-raised p-6 md:p-8">
-                  <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-                    <div className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em]">
-                      Bounty #{bountyId}
-                    </div>
-                    <Badge variant={STATUS_VARIANTS[bounty.status]}>
-                      {STATUS_LABELS[bounty.status]}
-                    </Badge>
-                  </div>
-
-                  <h1
-                    className="font-display font-bold text-ink leading-[0.9] tracking-tight mb-6"
-                    style={{ fontSize: "clamp(2.5rem, 6vw, 5rem)" }}
-                  >
-                    {metadata?.title || `Bounty #${bountyId}`}
-                  </h1>
-
-                  {metadata?.description ? (
-                    <p className="text-lg md:text-xl text-ink-muted leading-relaxed max-w-3xl">
-                      {metadata.description}
-                    </p>
-                  ) : (
-                    <p className="text-base text-ink-faint font-mono leading-relaxed">
-                      No problem statement provided for this bounty.
-                    </p>
-                  )}
-
-                  {(metadata?.tags?.length || metadata?.difficulty) && (
-                    <div className="flex flex-wrap gap-2 mt-6 pt-6 border-t border-border">
-                      {metadata?.difficulty && (
-                        <Badge variant="brand" size="sm">
-                          {metadata.difficulty}
-                        </Badge>
-                      )}
-                      {metadata?.tags?.map((tag) => (
-                        <Badge key={tag} variant="default" size="sm">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Stats strip */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-0 border-2 border-border">
-                  {[
-                    {
-                      label: "Reward",
-                      value: `${ethers.formatEther(bounty.reward)} ETH`,
-                      accent: true,
-                    },
-                    {
-                      label: "Status",
-                      value: STATUS_LABELS[bounty.status],
-                      accent: false,
-                    },
-                    {
-                      label: "Expires",
-                      value: expiresAtDate
-                        ? expiresAtDate.toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                          })
-                        : "—",
-                      accent: false,
-                    },
-                    {
-                      label: "Poster",
-                      value: `${bounty.poster.slice(0, 6)}…${bounty.poster.slice(-4)}`,
-                      accent: false,
-                    },
-                  ].map((stat, i) => (
-                    <div
-                      key={stat.label}
-                      className={`p-4 md:p-5 ${
-                        i < 3 ? "border-r-0 md:border-r-2" : ""
-                      } border-border ${i < 2 ? "border-b-2 md:border-b-0" : ""}`}
-                    >
-                      <div className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em] mb-2">
-                        {stat.label}
-                      </div>
-                      <div
-                        className={`font-mono text-sm md:text-base font-bold tabular-nums ${
-                          stat.accent ? "text-brand" : "text-ink"
-                        }`}
-                      >
-                        {stat.value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* ═══════════════ RIGHT: On-chain data ═══════════════ */}
-              <div className="lg:col-span-4 space-y-6">
-                <div className="border-2 border-border bg-surface-sunken p-1">
-                  <div className="px-3 py-2 border-b border-border bg-surface-raised">
-                    <span className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em]">
-                      On-Chain Data
-                    </span>
-                  </div>
-                  <div className="p-4 font-mono text-xs space-y-4">
-                    <div>
-                      <div className="text-ink-faint uppercase tracking-wider mb-1">
-                        Poster Address
-                      </div>
-                      <div className="text-ink break-all">{bounty.poster}</div>
-                    </div>
-                    <div>
-                      <div className="text-ink-faint uppercase tracking-wider mb-1">
-                        Answer Hash
-                      </div>
-                      <div className="text-ink-muted break-all text-[10px] leading-relaxed">
-                        {bounty.answerHash}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-ink-faint uppercase tracking-wider mb-1">
-                        Expires At
-                      </div>
-                      <div className="text-ink-muted">
-                        {expiresAtDate?.toLocaleString("en-US")}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-ink-faint uppercase tracking-wider mb-1">
-                        Raw Reward (wei)
-                      </div>
-                      <div className="text-ink-muted">
-                        {bounty.reward.toString()}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {metadata?.solverStake && (
-                  <div className="border border-border bg-surface-raised p-5">
-                    <div className="flex items-start gap-3">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center border border-brand text-brand text-xs font-bold">
-                        i
-                      </span>
-                      <div>
-                        <div className="font-mono text-[10px] text-brand uppercase tracking-[0.2em] mb-1">
-                          Solver Requirements
-                        </div>
-                        <p className="text-sm text-ink-muted">
-                          Minimum stake required to claim:{" "}
-                          <span className="text-ink font-mono">
-                            {metadata.solverStake} ETH
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {canReclaim && (
-                  <div className="border-2 border-brand p-6 bg-surface">
-                    <div className="font-mono text-[10px] text-brand uppercase tracking-[0.2em] mb-3">
-                      Poster Action
-                    </div>
-                    <h3 className="font-display font-bold text-ink text-xl mb-3">
-                      RECLAIM EXPIRED ESCROW
-                    </h3>
-                    <p className="text-sm text-ink-muted mb-6 leading-relaxed">
-                      This bounty is strictly past its deadline. Reclaim the full
-                      escrowed reward back to your poster wallet.
-                    </p>
-                    <Button
-                      type="button"
-                      className="w-full"
-                      isLoading={isReclaiming}
-                      onClick={handleReclaim}
-                    >
-                      Reclaim escrow
-                    </Button>
-                  </div>
-                )}
-
-                {/* CTA */}
-                <div className="border-2 border-brand p-6 bg-surface">
-                  <h3 className="font-display font-bold text-ink text-xl mb-3">
-                    HAVE A SOLUTION?
-                  </h3>
-                  <p className="text-sm text-ink-muted mb-6 leading-relaxed">
-                    If you can prove the answer, submit it to claim the
-                    escrowed reward.
+            <div className="border-2 border-border bg-surface-raised p-6 md:p-8 reveal-item">
+              {statusNumber === BOUNTY_STATUS.Paid ? (
+                <div className="space-y-4">
+                  <div className="font-mono text-xs text-brand uppercase tracking-[0.2em]">Outcome</div>
+                  <h2 className="font-display text-4xl uppercase">Bounty Solved</h2>
+                  <p className="text-ink-muted">
+                    Solver {truncateAddress(outcome?.solver ?? "")} received {formatReward(bounty[2])}.
                   </p>
-                  <button className="w-full inline-flex items-center justify-center px-6 py-3 text-sm font-bold tracking-widest uppercase bg-brand text-surface hover:bg-brand-dim active:translate-y-[1px] transition-all duration-normal">
-                    Submit Answer
-                  </button>
                 </div>
+              ) : isOpen && isExpiredByClock ? (
+                <div className="space-y-4">
+                  <div className="font-mono text-xs text-brand uppercase tracking-[0.2em]">Outcome</div>
+                  <h2 className="font-display text-4xl uppercase">Expired</h2>
+                  <p className="text-ink-muted">
+                    This bounty expired before a valid solution was submitted.
+                  </p>
+                </div>
+              ) : isPoster ? (
+                <div className="space-y-4">
+                  <div className="font-mono text-xs text-brand uppercase tracking-[0.2em]">Submission</div>
+                  <h2 className="font-display text-4xl uppercase">Poster View</h2>
+                  <p className="text-ink-muted">You can&apos;t solve your own bounty.</p>
+                  <Button disabled variant="secondary">
+                    YOU CAN&apos;T SOLVE YOUR OWN BOUNTY
+                  </Button>
+                </div>
+              ) : state !== "connected" ? (
+                <div className="space-y-4">
+                  <div className="font-mono text-xs text-brand uppercase tracking-[0.2em]">Submission</div>
+                  <h2 className="font-display text-4xl uppercase">Connect Wallet</h2>
+                  <p className="text-ink-muted">Connect a Sepolia wallet to submit your answer.</p>
+                  <Button onClick={() => void connect()}>CONNECT WALLET REQUIRED</Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="font-mono text-xs text-brand uppercase tracking-[0.2em]">Submission</div>
+                  <h2 className="font-display text-4xl uppercase">Submit Solution</h2>
+                  <Input
+                    id="answer"
+                    label="Answer"
+                    value={answer}
+                    onChange={(event) => setAnswer(event.target.value)}
+                    placeholder="Enter your solution"
+                  />
+                  <Button
+                    onClick={() => void submitAnswer()}
+                    isLoading={submitting}
+                    disabled={!canSubmit}
+                  >
+                    {submitting ? "SUBMITTING..." : `CLAIM ${formatReward(bounty[2])}`}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="lg:col-span-5 space-y-6">
+            <div className="border-2 border-border bg-surface-sunken p-1 reveal-item">
+              <div className="px-3 py-2 border-b border-border bg-surface-raised">
+                <span className="font-mono text-xs text-ink-faint uppercase tracking-[0.2em]">
+                  Chain Readout
+                </span>
+              </div>
+              <div className="p-4 font-mono text-xs space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-ink-faint uppercase tracking-wider">Reward</span>
+                  <span className="text-brand tabular-nums">{formatReward(bounty[2])}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-ink-faint uppercase tracking-wider">Poster</span>
+                  <span className="text-ink">{truncateAddress(bounty[0])}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-ink-faint uppercase tracking-wider">Deadline</span>
+                  <span className={remaining < 3600 ? "text-brand tabular-nums" : "text-ink tabular-nums"}>
+                    {countdownLabel}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-ink-faint uppercase tracking-wider">Answer Hash</span>
+                  <span className="text-ink truncate">{truncateAddress(bounty[1])}</span>
+                </div>
+                {answerHashPreview && (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-ink-faint uppercase tracking-wider">Your Hash</span>
+                    <span className="text-brand truncate">{truncateAddress(answerHashPreview)}</span>
+                  </div>
+                )}
+                {outcome && (
+                  <div className="border-t border-border pt-3 space-y-2">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-ink-faint uppercase tracking-wider">Solver</span>
+                      <span className="text-ink">{truncateAddress(outcome.solver)}</span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-ink-faint uppercase tracking-wider">Tx</span>
+                      <a
+                        href={`https://sepolia.etherscan.io/tx/${outcome.txHash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-brand hover:text-brand-dim"
+                      >
+                        {truncateAddress(outcome.txHash)}
+                      </a>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          )}
-        </div>
-      </div>
+
+            <Link
+              href="/bounties"
+              className="inline-flex items-center justify-center px-6 py-3 text-sm font-bold tracking-widest uppercase bg-surface-raised border border-border text-ink hover:border-brand hover:text-brand transition-all duration-normal"
+            >
+              Back to bounties
+            </Link>
+          </div>
+        </section>
+      </main>
 
       <div className="fixed top-20 right-4 z-50 w-full max-w-sm">
         <Toast
@@ -465,9 +427,9 @@ export default function BountyPage() {
           variant={toast.variant}
           title={toast.title}
           description={toast.description}
-          onDismiss={hideToast}
+          onDismiss={() => setToast((prev) => ({ ...prev, visible: false }))}
         />
       </div>
-    </main>
+    </div>
   );
 }

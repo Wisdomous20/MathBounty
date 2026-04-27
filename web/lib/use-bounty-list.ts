@@ -9,6 +9,7 @@ import {
 } from "@/lib/contracts";
 import { BOUNTY_STATUS } from "@/lib/bounty-state";
 import { useBountyMetadata } from "@/lib/use-bounty-metadata";
+import { getReadProvider } from "@/lib/read-provider";
 
 export type OpenBountyListItem = {
   id: string;
@@ -28,13 +29,6 @@ type BountyTuple = readonly [
 
 const BOUNTY_BATCH_SIZE = 50;
 const REFRESH_INTERVAL_MS = 45_000;
-
-function getReadProvider() {
-  const win = window as unknown as { ethereum?: ethers.Eip1193Provider };
-  return win.ethereum
-    ? new ethers.BrowserProvider(win.ethereum)
-    : new ethers.JsonRpcProvider("https://rpc.sepolia.org");
-}
 
 function getBountyIds(count: bigint) {
   const ids: string[] = [];

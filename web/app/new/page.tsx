@@ -151,7 +151,7 @@ export default function NewBountyPage() {
       MATH_BOUNTY_ABI,
       signer
     );
-    const answerHash = ethers.keccak256(ethers.toUtf8Bytes(answer));
+    const answerHash = ethers.keccak256(ethers.toUtf8Bytes(answer.trim()));
     const expiresAt = BigInt(
       Math.floor(Date.now() / 1000) + expirySeconds
     );
@@ -176,7 +176,7 @@ export default function NewBountyPage() {
   const answerHash = useMemo(() => {
     if (!answer.trim()) return null;
     try {
-      return ethers.keccak256(ethers.toUtf8Bytes(answer));
+      return ethers.keccak256(ethers.toUtf8Bytes(answer.trim()));
     } catch {
       return null;
     }
@@ -304,7 +304,7 @@ export default function NewBountyPage() {
         signer
       );
 
-      const answerHash = ethers.keccak256(ethers.toUtf8Bytes(answer));
+      const answerHash = ethers.keccak256(ethers.toUtf8Bytes(answer.trim()));
       const expiresAt = BigInt(getNowSeconds() + expirySeconds);
       const rewardWei = ethers.parseEther(reward);
 
