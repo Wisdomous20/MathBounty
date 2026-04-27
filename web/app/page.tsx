@@ -35,7 +35,7 @@ export default function Home() {
             MathBounty
           </Link>
           <nav className="hidden md:flex items-center gap-12 text-sm font-bold tracking-wide text-ink-muted uppercase">
-            <Link href="#bounties" className="hover:text-brand active:opacity-70 transition-all duration-fast">Bounties</Link>
+            <Link href="/bounties" className="hover:text-brand active:opacity-70 transition-all duration-fast">Bounties</Link>
             <Link href="#mechanism" className="hover:text-brand active:opacity-70 transition-all duration-fast">Mechanism</Link>
             <Link href="#docs" className="hover:text-brand active:opacity-70 transition-all duration-fast">Docs</Link>
           </nav>

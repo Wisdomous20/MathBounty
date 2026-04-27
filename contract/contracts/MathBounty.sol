@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-contract MathBounty {
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+contract MathBounty is ReentrancyGuard {
     enum BountyStatus {
         Open,
         Paid,
@@ -22,11 +24,14 @@ contract MathBounty {
     error NotOpen();
     error NotExpired();
     error RefundFailed();
+    error InvalidAnswer();
+    error Expired();
+    error SelfSolveForbidden();
+    error PayoutFailed();
 
     uint256 public bountyCount;
     mapping(uint256 => Bounty) private bounties;
     mapping(address => uint256[]) private posterBounties;
-    bool private locked;
 
     event BountyPosted(
         uint256 indexed bountyId,
@@ -50,18 +55,6 @@ contract MathBounty {
 
     modifier onlyOpen(uint256 bountyId) {
         require(bounties[bountyId].status == BountyStatus.Open, "Bounty is not open");
-        _;
-    }
-
-    modifier nonReentrant() {
-        require(!locked, "Reentrant call");
-        locked = true;
-        _;
-        locked = false;
-    }
-
-    modifier notExpired(uint256 bountyId) {
-        require(block.timestamp <= bounties[bountyId].expiresAt, "Bounty has expired");
         _;
     }
 
@@ -91,25 +84,22 @@ contract MathBounty {
 
     function submitAnswer(uint256 bountyId, string calldata answer)
         external
-        onlyOpen(bountyId)
-        notExpired(bountyId)
+        nonReentrant
     {
         Bounty storage bounty = bounties[bountyId];
-        require(bounty.poster != address(0), "Bounty does not exist");
-        require(msg.sender != bounty.poster, "Poster cannot solve own bounty");
+        if (bounty.status != BountyStatus.Open) revert NotOpen();
+        if (block.timestamp > bounty.expiresAt) revert Expired();
+        if (msg.sender == bounty.poster) revert SelfSolveForbidden();
+        if (keccak256(bytes(answer)) != bounty.answerHash) revert InvalidAnswer();
 
-        bool isCorrect = keccak256(abi.encodePacked(answer)) == bounty.answerHash;
+        bounty.status = BountyStatus.Paid;
 
-        if (isCorrect) {
-            bounty.status = BountyStatus.Paid;
+        uint256 payout = bounty.reward;
+        bounty.reward = 0;
+        (bool success, ) = payable(msg.sender).call{value: payout}("");
+        if (!success) revert PayoutFailed();
 
-            uint256 payout = bounty.reward;
-            bounty.reward = 0;
-            (bool success, ) = msg.sender.call{value: payout}("");
-            require(success, "Reward payout failed");
-
-            emit BountySolved(bountyId, msg.sender, payout);
-        }
+        emit BountySolved(bountyId, msg.sender, payout);
     }
 
     function reclaimExpired(uint256 bountyId) external nonReentrant {

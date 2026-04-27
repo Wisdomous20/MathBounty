@@ -31,6 +31,16 @@ export async function assertMathBountyContract(provider: {
 }
 
 export const MATH_BOUNTY_ABI = [
+  "error InvalidAnswer()",
+  "error Expired()",
+  "error SelfSolveForbidden()",
+  "error PayoutFailed()",
+  "error NotOpen()",
+  "error NotPoster()",
+  "error NotExpired()",
+  "error RefundFailed()",
+  "error RewardTooLow()",
+  "error InvalidExpiry()",
   "function postBounty(bytes32 answerHash, uint256 expiresAt) external payable returns (uint256)",
   "function submitAnswer(uint256 bountyId, string calldata answer) external",
   "function reclaimExpired(uint256 bountyId) external",
