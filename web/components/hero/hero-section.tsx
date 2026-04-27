@@ -66,7 +66,7 @@ export function HeroSection() {
 
             <div className="reveal-item flex flex-wrap gap-4 mt-10">
               <Link
-                href="#bounties"
+                href="/bounties"
                 className="inline-flex items-center justify-center px-10 py-4 text-sm font-bold tracking-widest uppercase bg-brand text-surface hover:bg-brand-dim active:translate-y-[1px] active:scale-[0.98] transition-all duration-normal"
               >
                 View Bounties
