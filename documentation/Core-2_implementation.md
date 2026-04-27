@@ -146,6 +146,19 @@ So `/me/solved` must query `BountySolved` events (not `SolutionAccepted`) unless
 - Deployment script prints address + tx + block for easier frontend sync.
 - A local background block-scan helper previously failed and was superseded by the improved deploy script output; no action needed.
 
+## Navigation Convention (Updated)
+
+To avoid mixed navigation behavior across pages:
+
+- Use `/bounties` for primary bounty discovery navigation (header links, hero CTA, cross-page links).
+- Reserve `#bounties` only for same-page anchor scrolling inside the home page.
+- If the home page keeps a `#bounties` section, it should be aligned with the same component system and live on-chain data used by `/bounties` (avoid static/demo-only divergence).
+
+Implemented in this pass:
+
+- `web/app/page.tsx`: header "Bounties" link now routes to `/bounties`
+- `web/components/hero/hero-section.tsx`: "View Bounties" CTA now routes to `/bounties`
+
 ## Recommended Next Steps for CORE-5
 
 1. Build `web/app/me/posts/page.tsx` and `web/app/me/solved/page.tsx`
@@ -154,6 +167,106 @@ So `/me/solved` must query `BountySolved` events (not `SolutionAccepted`) unless
 4. Wire `/me/posts` reclaim button to existing reclaim behavior
 5. Use `BountySolved` event for `/me/solved` rows
 6. Reuse existing toast/error conventions from CORE-2 helpers
+
+## Manual Test Guide (CORE-2 + related flows)
+
+Use Sepolia with two wallets:
+
+- Wallet A = poster
+- Wallet B = solver
+
+Pre-checks:
+
+- `web/.env` (or `.env.local`) has valid `NEXT_PUBLIC_MATH_BOUNTY_ADDRESS` and `NEXT_PUBLIC_MATH_BOUNTY_DEPLOY_BLOCK`
+- MetaMask is connected to Sepolia
+- both wallets have Sepolia ETH for gas, and poster has enough ETH for bounty reward
+
+### 1) Post a bounty
+
+1. Connect Wallet A
+2. Open `/new`
+3. Enter title/description/answer/reward/expiry and submit
+4. Confirm tx in wallet
+
+Expected:
+
+- success toast after confirmation
+- route changes to `/bounty/[id]`
+- bounty appears on `/bounties` within refresh window
+
+### 2) Incorrect answer (solver path)
+
+1. Switch/connect Wallet B
+2. Open target `/bounty/[id]`
+3. Submit an incorrect answer
+
+Expected:
+
+- transaction reverts
+- error toast indicating wrong answer
+- bounty status remains Open
+- no payout to solver
+
+### 3) Correct answer + payout
+
+1. Still on Wallet B, submit the correct answer
+2. Confirm tx in wallet
+
+Expected:
+
+- success toast with tx reference
+- bounty status changes to Paid
+- `BountySolved` event emitted on-chain
+- Wallet B balance increases (net of gas)
+
+### 4) Poster protection (self-solve blocked)
+
+1. Open same bounty as Wallet A (poster)
+2. Attempt to solve from poster view
+
+Expected:
+
+- UI prevents solving (disabled/self-solve blocked state)
+- contract-level protection also exists (`SelfSolveForbidden`) if submit is forced externally
+
+### 5) Expired behavior + reclaim
+
+1. Post a bounty with short expiry using Wallet A
+2. Wait until `now > expiresAt`
+3. Verify expired state in UI
+4. Trigger reclaim from eligible poster surface
+
+Expected:
+
+- reclaim only available when all conditions hold:
+  - poster is connected caller
+  - bounty is Open
+  - current time is strictly after expiry
+- reclaim success toast after confirmation
+- status changes to Expired
+- Wallet A receives refund (minus gas)
+- `BountyReclaimed` event emitted
+
+### 6) Wallet state handling
+
+1. Disconnect wallet on `/bounty/[id]`
+2. Reconnect with different wallet
+3. Switch between Wallet A and Wallet B while viewing same bounty
+
+Expected:
+
+- disconnected state shows connect prompt
+- reconnect rehydrates view without page break
+- poster vs solver action states update correctly after account switch
+- no stale actions should remain enabled after wallet change
+
+### Optional on-chain verification checklist
+
+- Etherscan shows:
+  - `BountyPosted` for create
+  - failed wrong-answer tx (reverted)
+  - successful correct-answer tx with `BountySolved`
+  - reclaim tx with `BountyReclaimed` for expired case
 
 ---
 
