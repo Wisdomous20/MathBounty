@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { head, put } from "@vercel/blob";
+import { get, put } from "@vercel/blob";
 
 type BountyMetadata = {
   title: string;
@@ -31,6 +31,14 @@ function canUseLocalFileFallback() {
   return process.env.VERCEL !== "1";
 }
 
+function assertPersistentStoreConfigured() {
+  if (!canUseBlobStorage() && !canUseLocalFileFallback()) {
+    throw new Error(
+      "Persistent metadata storage is not configured. Set BLOB_READ_WRITE_TOKEN in Vercel."
+    );
+  }
+}
+
 async function ensureMetadataFile() {
   await mkdir(path.dirname(METADATA_FILE_PATH), { recursive: true });
 
@@ -59,18 +67,16 @@ async function writeLocalMetadataStore(store: MetadataStore) {
 }
 
 async function readBlobMetadata(bountyId: string) {
-  try {
-    const blob = await head(getBlobPath(bountyId));
-    const response = await fetch(blob.url, { cache: "no-store" });
+  const result = await get(getBlobPath(bountyId), {
+    access: "public",
+    useCache: false,
+  });
 
-    if (!response.ok) {
-      return null;
-    }
-
-    return (await response.json()) as BountyMetadata;
-  } catch {
+  if (!result || result.statusCode !== 200) {
     return null;
   }
+
+  return (await new Response(result.stream).json()) as BountyMetadata;
 }
 
 async function writeBlobMetadata(bountyId: string, metadata: BountyMetadata) {
@@ -84,6 +90,8 @@ async function writeBlobMetadata(bountyId: string, metadata: BountyMetadata) {
 }
 
 export async function readBountyMetadata(bountyId: string) {
+  assertPersistentStoreConfigured();
+
   if (canUseBlobStorage()) {
     return readBlobMetadata(bountyId);
   }
@@ -97,6 +105,8 @@ export async function readBountyMetadata(bountyId: string) {
 }
 
 export async function readManyBountyMetadata(bountyIds: string[]) {
+  assertPersistentStoreConfigured();
+
   if (canUseBlobStorage()) {
     const entries = await Promise.all(
       bountyIds.map(async (id) => [id, await readBlobMetadata(id)] as const)
@@ -126,6 +136,8 @@ export async function readManyBountyMetadata(bountyIds: string[]) {
 }
 
 export async function writeBountyMetadata(bountyId: string, metadata: BountyMetadata) {
+  assertPersistentStoreConfigured();
+
   if (canUseBlobStorage()) {
     await writeBlobMetadata(bountyId, metadata);
     return;
@@ -137,8 +149,4 @@ export async function writeBountyMetadata(bountyId: string, metadata: BountyMeta
     await writeLocalMetadataStore(store);
     return;
   }
-
-  throw new Error(
-    "Persistent metadata storage is not configured. Set BLOB_READ_WRITE_TOKEN in Vercel."
-  );
 }

@@ -69,6 +69,23 @@ function cacheMetadataEntry(
   writeAllCachedMetadata(all);
 }
 
+function toPublicMetadataRecord(
+  metadataById: Record<string, CachedBountyMetadata>
+) {
+  return Object.entries(metadataById).reduce<Record<string, BountyMetadata>>(
+    (acc, [id, metadata]) => {
+      const publicMetadata = toPublicMetadata(metadata);
+
+      if (publicMetadata) {
+        acc[id] = publicMetadata;
+      }
+
+      return acc;
+    },
+    {}
+  );
+}
+
 async function fetchMetadataBatchFromApi(ids: string[]) {
   if (ids.length === 0) {
     return {} as Record<string, BountyMetadata>;
@@ -82,7 +99,11 @@ async function fetchMetadataBatchFromApi(ids: string[]) {
   });
 
   if (!response.ok) {
-    throw new Error("Failed to load shared bounty metadata.");
+    const payload = (await response.json().catch(() => null)) as
+      | { error?: string }
+      | null;
+
+    throw new Error(payload?.error || "Failed to load shared bounty metadata.");
   }
 
   const payload = (await response.json()) as {
@@ -101,42 +122,46 @@ export function useBountyMetadata() {
   const getMetadataBatch = useCallback(async (bountyIds: string[]) => {
     const uniqueIds = [...new Set(bountyIds.filter(Boolean))];
     const cached = readAllCachedMetadata();
-    const missingIds = uniqueIds.filter((id) => !(id in cached));
-
-    if (missingIds.length > 0) {
-      try {
-        const shared = await fetchMetadataBatchFromApi(missingIds);
-
-        if (Object.keys(shared).length > 0) {
-          const merged = { ...cached };
-
-          Object.entries(shared).forEach(([id, metadata]) => {
-            merged[id] = {
-              ...metadata,
-              txHash: merged[id]?.txHash,
-              syncedAt: merged[id]?.syncedAt,
-            };
-          });
-
-          writeAllCachedMetadata(merged);
-        }
-
-        return {
-          ...Object.fromEntries(
-            Object.entries(cached).map(([id, metadata]) => [id, toPublicMetadata(metadata)])
-          ),
-          ...shared,
-        } as Record<string, BountyMetadata>;
-      } catch {
-        return Object.fromEntries(
-          Object.entries(cached).map(([id, metadata]) => [id, toPublicMetadata(metadata)])
-        ) as Record<string, BountyMetadata>;
+    const cachedForRequestedIds = uniqueIds.reduce<
+      Record<string, CachedBountyMetadata>
+    >((acc, id) => {
+      if (cached[id]) {
+        acc[id] = cached[id];
       }
-    }
 
-    return Object.fromEntries(
-      Object.entries(cached).map(([id, metadata]) => [id, toPublicMetadata(metadata)])
-    ) as Record<string, BountyMetadata>;
+      return acc;
+    }, {});
+
+    try {
+      const shared = await fetchMetadataBatchFromApi(uniqueIds);
+
+      if (Object.keys(shared).length > 0) {
+        const merged = { ...cached };
+
+        Object.entries(shared).forEach(([id, metadata]) => {
+          merged[id] = {
+            ...metadata,
+            txHash: merged[id]?.txHash,
+            syncedAt: merged[id]?.syncedAt,
+          };
+        });
+
+        writeAllCachedMetadata(merged);
+      }
+
+      return {
+        ...toPublicMetadataRecord(cached),
+        ...shared,
+      };
+    } catch {
+      const fallback = toPublicMetadataRecord(cachedForRequestedIds);
+
+      if (Object.keys(fallback).length > 0) {
+        return fallback;
+      }
+
+      throw new Error("Failed to load shared bounty metadata.");
+    }
   }, []);
 
   const saveMetadata = useCallback(
@@ -184,10 +209,29 @@ export function useBountyMetadata() {
     [saveMetadata]
   );
 
+  const syncPendingMetadata = useCallback(async () => {
+    const cachedEntries = Object.entries(readAllCachedMetadata());
+
+    for (const [bountyId, cached] of cachedEntries) {
+      const metadata = toPublicMetadata(cached);
+
+      if (!metadata || !cached.txHash || cached.syncedAt) {
+        continue;
+      }
+
+      try {
+        await saveMetadata(bountyId, cached.txHash, metadata);
+      } catch {
+        // Keep unsynced metadata cached for a later retry.
+      }
+    }
+  }, [saveMetadata]);
+
   return {
     getMetadata,
     getMetadataBatch,
     saveMetadata,
     syncMetadataToServer,
+    syncPendingMetadata,
   };
 }

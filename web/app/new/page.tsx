@@ -340,7 +340,12 @@ export default function NewBountyPage() {
           ? `Bounty #${bountyId} created successfully`
           : `Bounty #${bountyId} was posted on-chain, but shared metadata could not be saved.`
       );
-      router.push(`/bounty/${bountyId}`);
+
+      if (metadataPersisted) {
+        router.push(`/bounty/${bountyId}`);
+      } else {
+        setIsPending(false);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       showToast("error", "Transaction Failed", msg);

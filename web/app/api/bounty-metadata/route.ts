@@ -22,6 +22,10 @@ const MAX_DESCRIPTION_LENGTH = 2000;
 const MAX_TAGS = 5;
 const MAX_TAG_LENGTH = 32;
 const ALLOWED_DIFFICULTIES = new Set(["Easy", "Medium", "Hard", "Expert"]);
+const SERVER_SEPOLIA_RPC_URL =
+  process.env.SEPOLIA_RPC_URL ||
+  process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL ||
+  "https://ethereum-sepolia-rpc.publicnode.com";
 
 function validateBountyId(bountyId: unknown) {
   if (typeof bountyId !== "string" || !/^[1-9]\d*$/.test(bountyId)) {
@@ -79,7 +83,7 @@ async function verifyPostedBountyReceipt(bountyId: string, txHash: string) {
     throw new Error("Invalid transaction hash.");
   }
 
-  const provider = new ethers.JsonRpcProvider("https://rpc.sepolia.org");
+  const provider = new ethers.JsonRpcProvider(SERVER_SEPOLIA_RPC_URL);
   const receipt = await provider.getTransactionReceipt(txHash);
 
   if (!receipt || receipt.status !== 1) {
@@ -116,16 +120,23 @@ async function verifyPostedBountyReceipt(bountyId: string, txHash: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const ids = request.nextUrl.searchParams
-    .getAll("id")
-    .filter((id) => /^[1-9]\d*$/.test(id));
+  try {
+    const ids = request.nextUrl.searchParams
+      .getAll("id")
+      .filter((id) => /^[1-9]\d*$/.test(id));
 
-  if (ids.length === 0) {
-    return NextResponse.json({ metadata: {} });
+    if (ids.length === 0) {
+      return NextResponse.json({ metadata: {} });
+    }
+
+    const metadata = await readManyBountyMetadata(ids);
+    return NextResponse.json({ metadata });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to load metadata.";
+
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  const metadata = await readManyBountyMetadata(ids);
-  return NextResponse.json({ metadata });
 }
 
 export async function POST(request: NextRequest) {
