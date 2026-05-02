@@ -87,8 +87,6 @@ async function readBlobMetadataWithAccess(bountyId: string, access: BlobAccess) 
 }
 
 async function readBlobMetadata(bountyId: string) {
-  let firstAttemptError: unknown = null;
-
   try {
     const metadata = await readBlobMetadataWithAccess(
       bountyId,
@@ -98,8 +96,8 @@ async function readBlobMetadata(bountyId: string) {
     if (metadata) {
       return metadata;
     }
-  } catch (error) {
-    firstAttemptError = error;
+  } catch {
+    // Try the alternate access mode below.
   }
 
   try {
@@ -112,11 +110,8 @@ async function readBlobMetadata(bountyId: string) {
       return metadata;
     }
   } catch {
-    // Fall through and return null below.
-  }
-
-  if (firstAttemptError) {
-    throw firstAttemptError;
+    // Treat blob fetch failures as missing metadata so one bad read
+    // does not break the entire metadata batch request.
   }
 
   return null;
@@ -167,11 +162,16 @@ export async function readManyBountyMetadata(bountyIds: string[]) {
   assertPersistentStoreConfigured();
 
   if (canUseBlobStorage()) {
-    const entries = await Promise.all(
+    const entries = await Promise.allSettled(
       bountyIds.map(async (id) => [id, await readBlobMetadata(id)] as const)
     );
 
-    return entries.reduce<Record<string, BountyMetadata>>((acc, [id, metadata]) => {
+    return entries.reduce<Record<string, BountyMetadata>>((acc, entry) => {
+      if (entry.status !== "fulfilled") {
+        return acc;
+      }
+
+      const [id, metadata] = entry.value;
       if (metadata) {
         acc[id] = metadata;
       }
