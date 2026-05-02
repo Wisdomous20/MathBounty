@@ -87,6 +87,8 @@ async function readBlobMetadataWithAccess(bountyId: string, access: BlobAccess) 
 }
 
 async function readBlobMetadata(bountyId: string) {
+  let firstAttemptError: unknown = null;
+
   try {
     const metadata = await readBlobMetadataWithAccess(
       bountyId,
@@ -96,18 +98,28 @@ async function readBlobMetadata(bountyId: string) {
     if (metadata) {
       return metadata;
     }
-  } catch {
-    // Try the other access mode below. Vercel Blob stores may be public or private.
+  } catch (error) {
+    firstAttemptError = error;
   }
 
   try {
-    return await readBlobMetadataWithAccess(
+    const metadata = await readBlobMetadataWithAccess(
       bountyId,
       getAlternateBlobAccess(DEFAULT_BLOB_ACCESS)
     );
+
+    if (metadata) {
+      return metadata;
+    }
   } catch {
-    return null;
+    // Fall through and return null below.
   }
+
+  if (firstAttemptError) {
+    throw firstAttemptError;
+  }
+
+  return null;
 }
 
 async function writeBlobMetadataWithAccess(
