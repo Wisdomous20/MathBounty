@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { get, put } from "@vercel/blob";
+import { get, list, put } from "@vercel/blob";
 
 type BountyMetadata = {
   title: string;
@@ -74,7 +74,18 @@ async function writeLocalMetadataStore(store: MetadataStore) {
 }
 
 async function readBlobMetadataWithAccess(bountyId: string, access: BlobAccess) {
-  const result = await get(getBlobPath(bountyId), {
+  const pathname = getBlobPath(bountyId);
+  const listing = await list({
+    limit: 10,
+    prefix: pathname,
+  });
+  const blob = listing.blobs.find((entry) => entry.pathname === pathname);
+
+  if (!blob) {
+    return null;
+  }
+
+  const result = await get(blob.url, {
     access,
     useCache: false,
   });
