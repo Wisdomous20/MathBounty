@@ -26,6 +26,12 @@ const SERVER_SEPOLIA_RPC_URL =
   process.env.SEPOLIA_RPC_URL ||
   process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL ||
   "https://ethereum-sepolia-rpc.publicnode.com";
+const RECEIPT_RETRY_ATTEMPTS = 5;
+const RECEIPT_RETRY_DELAY_MS = 1_500;
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function validateBountyId(bountyId: unknown) {
   if (typeof bountyId !== "string" || !/^[1-9]\d*$/.test(bountyId)) {
@@ -84,10 +90,22 @@ async function verifyPostedBountyReceipt(bountyId: string, txHash: string) {
   }
 
   const provider = new ethers.JsonRpcProvider(SERVER_SEPOLIA_RPC_URL);
-  const receipt = await provider.getTransactionReceipt(txHash);
+  let receipt = null;
+
+  for (let attempt = 0; attempt < RECEIPT_RETRY_ATTEMPTS; attempt += 1) {
+    receipt = await provider.getTransactionReceipt(txHash);
+
+    if (receipt?.status === 1) {
+      break;
+    }
+
+    if (attempt < RECEIPT_RETRY_ATTEMPTS - 1) {
+      await delay(RECEIPT_RETRY_DELAY_MS);
+    }
+  }
 
   if (!receipt || receipt.status !== 1) {
-    throw new Error("Transaction receipt not found.");
+    throw new Error("Transaction receipt not found yet. Please retry in a few seconds.");
   }
 
   const contractAddress = MATH_BOUNTY_ADDRESS.toLowerCase();
