@@ -8,7 +8,6 @@ import {
   MATH_BOUNTY_ADDRESS,
   MATH_BOUNTY_DEPLOY_BLOCK,
 } from "@/lib/contracts";
-import { BOUNTY_STATUS } from "@/lib/bounty-state";
 import { useBountyMetadata } from "@/lib/use-bounty-metadata";
 import { getReadProvider } from "@/lib/read-provider";
 
@@ -29,10 +28,16 @@ type BountyTuple = readonly [
   status: bigint
 ];
 
+type BountyPostedEvent = {
+  args: {
+    bountyId: bigint;
+  };
+};
+
 const REFRESH_INTERVAL_MS = 45_000;
 
 export function useUserBounties(accountAddress?: string | null) {
-  const { getMetadata } = useBountyMetadata();
+  const { getMetadataBatch } = useBountyMetadata();
   const [bounties, setBounties] = useState<UserBountyItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,9 +72,12 @@ export function useUserBounties(accountAddress?: string | null) {
 
         // Filter BountyPosted by poster
         const filter = contract.filters.BountyPosted(null, accountAddress);
-        const events = await contract.queryFilter(filter, MATH_BOUNTY_DEPLOY_BLOCK);
-        
-        const ids = events.map(e => (e as any).args.bountyId.toString());
+        const events = (await contract.queryFilter(
+          filter,
+          MATH_BOUNTY_DEPLOY_BLOCK
+        )) as unknown as BountyPostedEvent[];
+
+        const ids = events.map((event) => event.args.bountyId.toString());
         if (ids.length === 0) {
           setBounties([]);
           setError(null);
@@ -84,9 +92,10 @@ export function useUserBounties(accountAddress?: string | null) {
           data = await Promise.all(ids.map(id => contract.getBounty(id) as Promise<BountyTuple>));
         }
 
+        const metadataById = await getMetadataBatch(ids);
         const loaded: UserBountyItem[] = ids.map((id, index) => {
           const state = data[index];
-          const metadata = getMetadata(id);
+          const metadata = metadataById[id];
           return {
             id,
             poster: state[0],
@@ -110,10 +119,14 @@ export function useUserBounties(accountAddress?: string | null) {
 
     inFlightFetchRef.current = request;
     return request;
-  }, [accountAddress, getMetadata]);
+  }, [accountAddress, getMetadataBatch]);
 
   useEffect(() => {
-    void fetchBounties();
+    const timer = window.setTimeout(() => {
+      void fetchBounties();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [fetchBounties]);
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ethers } from "ethers";
@@ -20,7 +20,7 @@ import {
 } from "@/lib/contracts";
 import { decodeContractError } from "@/lib/decode-revert";
 import { getReadProvider } from "@/lib/read-provider";
-import { useBountyMetadata } from "@/lib/use-bounty-metadata";
+import { type BountyMetadata, useBountyMetadata } from "@/lib/use-bounty-metadata";
 import { useWallet } from "@/lib/use-wallet";
 
 type BountyTuple = readonly [
@@ -71,9 +71,10 @@ export default function BountyDetailPage() {
   const params = useParams();
   const idParam = params?.id;
   const bountyId = Array.isArray(idParam) ? idParam[0] : idParam;
-  const { getMetadata } = useBountyMetadata();
+  const { getMetadataBatch } = useBountyMetadata();
   const { state, address, signer, connect, disconnect, switchNetwork } = useWallet();
   const [bounty, setBounty] = useState<BountyTuple | null>(null);
+  const [metadata, setMetadata] = useState<BountyMetadata | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [answer, setAnswer] = useState("");
@@ -117,6 +118,8 @@ export default function BountyDetailPage() {
 
       setBounty(data);
       setError(null);
+      const metadataById = await getMetadataBatch([bountyId]);
+      setMetadata(metadataById[bountyId] ?? null);
 
       const chainBountyId = BigInt(bountyId);
       const solvedEvents = await contract.queryFilter(
@@ -134,10 +137,11 @@ export default function BountyDetailPage() {
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load bounty.");
+      setMetadata(null);
     } finally {
       setLoading(false);
     }
-  }, [bountyId]);
+  }, [bountyId, getMetadataBatch]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -154,11 +158,6 @@ export default function BountyDetailPage() {
 
     return () => window.clearInterval(timer);
   }, []);
-
-  const metadata = useMemo(() => {
-    if (!bountyId) return null;
-    return getMetadata(bountyId);
-  }, [bountyId, getMetadata]);
 
   const expiresAt = bounty ? Number(bounty[3]) : 0;
   const isExpiredByClock = bounty ? nowSeconds > expiresAt : false;
