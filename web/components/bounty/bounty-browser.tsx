@@ -12,6 +12,7 @@ import { Toast } from "@/components/ui/toast";
 import { WalletConnectState } from "@/components/ui/wallet-connect-state";
 import { ConnectWalletPrompt } from "@/components/ui/connect-wallet-prompt";
 import { useBountyList } from "@/lib/use-bounty-list";
+import { useBountyMetadata } from "@/lib/use-bounty-metadata";
 import { useWallet } from "@/lib/use-wallet";
 
 function formatReward(reward: bigint) {
@@ -43,6 +44,7 @@ function BountyGridSkeleton() {
 
 export function BountyBrowser() {
   const { state, address, connect, disconnect, switchNetwork } = useWallet();
+  const { syncPendingMetadata } = useBountyMetadata();
   const { bounties, loading, error, lastUpdatedAt, retry } = useBountyList(address);
   const [nowSeconds, setNowSeconds] = useState(() => Math.floor(Date.now() / 1000));
   const [showErrorToast, setShowErrorToast] = useState(false);
@@ -62,6 +64,14 @@ export function BountyBrowser() {
 
     return () => window.clearTimeout(timer);
   }, [error, state]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void syncPendingMetadata();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [syncPendingMetadata]);
 
   const handleConnect = async () => {
     const connected = await connect();
