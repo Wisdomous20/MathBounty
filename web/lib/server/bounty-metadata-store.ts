@@ -11,6 +11,7 @@ type BountyMetadata = {
 };
 
 type MetadataStore = Record<string, BountyMetadata>;
+type BlobAccess = "public" | "private";
 
 const METADATA_FILE_PATH = path.join(
   process.cwd(),
@@ -18,9 +19,15 @@ const METADATA_FILE_PATH = path.join(
   "bounty-metadata.json"
 );
 const BLOB_PREFIX = "bounty-metadata";
+const DEFAULT_BLOB_ACCESS: BlobAccess =
+  process.env.BLOB_ACCESS === "private" ? "private" : "public";
 
 function getBlobPath(bountyId: string) {
   return `${BLOB_PREFIX}/${bountyId}.json`;
+}
+
+function getAlternateBlobAccess(access: BlobAccess): BlobAccess {
+  return access === "private" ? "public" : "private";
 }
 
 function canUseBlobStorage() {
@@ -66,9 +73,9 @@ async function writeLocalMetadataStore(store: MetadataStore) {
   await writeFile(METADATA_FILE_PATH, JSON.stringify(store, null, 2) + "\n", "utf8");
 }
 
-async function readBlobMetadata(bountyId: string) {
+async function readBlobMetadataWithAccess(bountyId: string, access: BlobAccess) {
   const result = await get(getBlobPath(bountyId), {
-    access: "public",
+    access,
     useCache: false,
   });
 
@@ -79,14 +86,54 @@ async function readBlobMetadata(bountyId: string) {
   return (await new Response(result.stream).json()) as BountyMetadata;
 }
 
-async function writeBlobMetadata(bountyId: string, metadata: BountyMetadata) {
+async function readBlobMetadata(bountyId: string) {
+  try {
+    const metadata = await readBlobMetadataWithAccess(
+      bountyId,
+      DEFAULT_BLOB_ACCESS
+    );
+
+    if (metadata) {
+      return metadata;
+    }
+  } catch {
+    // Try the other access mode below. Vercel Blob stores may be public or private.
+  }
+
+  try {
+    return await readBlobMetadataWithAccess(
+      bountyId,
+      getAlternateBlobAccess(DEFAULT_BLOB_ACCESS)
+    );
+  } catch {
+    return null;
+  }
+}
+
+async function writeBlobMetadataWithAccess(
+  bountyId: string,
+  metadata: BountyMetadata,
+  access: BlobAccess
+) {
   await put(getBlobPath(bountyId), JSON.stringify(metadata), {
-    access: "public",
+    access,
     allowOverwrite: true,
     addRandomSuffix: false,
     contentType: "application/json",
     cacheControlMaxAge: 60,
   });
+}
+
+async function writeBlobMetadata(bountyId: string, metadata: BountyMetadata) {
+  try {
+    await writeBlobMetadataWithAccess(bountyId, metadata, DEFAULT_BLOB_ACCESS);
+  } catch {
+    await writeBlobMetadataWithAccess(
+      bountyId,
+      metadata,
+      getAlternateBlobAccess(DEFAULT_BLOB_ACCESS)
+    );
+  }
 }
 
 export async function readBountyMetadata(bountyId: string) {
