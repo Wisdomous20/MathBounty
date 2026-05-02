@@ -320,6 +320,7 @@ export default function NewBountyPage() {
       const bountyId = getPostedBountyId(receipt);
 
       let metadataPersisted = true;
+      let metadataPersistError: string | null = null;
 
       try {
         await saveMetadata(bountyId, receipt.hash, {
@@ -329,8 +330,17 @@ export default function NewBountyPage() {
           tags: tagList,
           solverStake: solverStake || undefined,
         });
-      } catch {
+      } catch (metadataError: unknown) {
         metadataPersisted = false;
+        metadataPersistError =
+          metadataError instanceof Error
+            ? metadataError.message
+            : "Unknown metadata persistence error.";
+        console.error("Failed to persist shared bounty metadata", {
+          bountyId,
+          txHash: receipt.hash,
+          error: metadataError,
+        });
       }
 
       showToast(
@@ -338,7 +348,7 @@ export default function NewBountyPage() {
         metadataPersisted ? "Bounty Posted" : "Bounty Posted With Warning",
         metadataPersisted
           ? `Bounty #${bountyId} created successfully`
-          : `Bounty #${bountyId} was posted on-chain, but shared metadata could not be saved.`
+          : `Bounty #${bountyId} was posted on-chain, but shared metadata could not be saved: ${metadataPersistError ?? "unknown error"}.`
       );
 
       router.push(`/bounty/${bountyId}`);

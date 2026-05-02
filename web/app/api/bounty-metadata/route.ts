@@ -153,6 +153,12 @@ export async function GET(request: NextRequest) {
     const message =
       error instanceof Error ? error.message : "Failed to load metadata.";
 
+    console.error("Failed to load bounty metadata", {
+      error,
+      message,
+      url: request.nextUrl.toString(),
+    });
+
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -199,6 +205,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to persist metadata.";
+
+    console.error("Failed to persist bounty metadata", {
+      error,
+      message,
+    });
 
     return NextResponse.json({ error: message }, { status: 400 });
   }
