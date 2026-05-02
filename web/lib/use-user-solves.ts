@@ -22,8 +22,18 @@ export interface UserSolveItem {
 
 const REFRESH_INTERVAL_MS = 60_000;
 
+type BountySolvedEvent = {
+  args: {
+    bountyId: bigint;
+    reward: bigint;
+    solver: string;
+  };
+  blockNumber: number;
+  transactionHash: string;
+};
+
 export function useUserSolves(accountAddress?: string | null) {
-  const { getMetadata } = useBountyMetadata();
+  const { getMetadataBatch } = useBountyMetadata();
   const [solves, setSolves] = useState<UserSolveItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +67,10 @@ export function useUserSolves(accountAddress?: string | null) {
         );
 
         const filter = contract.filters.BountySolved(null, accountAddress);
-        const events = await contract.queryFilter(filter, MATH_BOUNTY_DEPLOY_BLOCK);
+        const events = (await contract.queryFilter(
+          filter,
+          MATH_BOUNTY_DEPLOY_BLOCK
+        )) as unknown as BountySolvedEvent[];
 
         if (events.length === 0) {
           setSolves([]);
@@ -65,11 +78,14 @@ export function useUserSolves(accountAddress?: string | null) {
           return;
         }
 
+        const bountyIds = events.map((event) => event.args.bountyId.toString());
+        const metadataById = await getMetadataBatch(bountyIds);
+
         const loaded: UserSolveItem[] = await Promise.all(
-          events.map(async (event: any) => {
+          events.map(async (event) => {
             const block = await provider.getBlock(event.blockNumber);
             const bountyId = event.args.bountyId.toString();
-            const metadata = getMetadata(bountyId);
+            const metadata = metadataById[bountyId];
             
             return {
               bountyId,
@@ -95,10 +111,14 @@ export function useUserSolves(accountAddress?: string | null) {
 
     inFlightFetchRef.current = request;
     return request;
-  }, [accountAddress, getMetadata]);
+  }, [accountAddress, getMetadataBatch]);
 
   useEffect(() => {
-    void fetchSolves();
+    const timer = window.setTimeout(() => {
+      void fetchSolves();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [fetchSolves]);
 
   useEffect(() => {

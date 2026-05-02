@@ -54,7 +54,7 @@ function getFallbackTitle(id: string) {
 }
 
 export function useBountyList(accountAddress?: string | null) {
-  const { getMetadata } = useBountyMetadata();
+  const { getMetadataBatch } = useBountyMetadata();
   const [bounties, setBounties] = useState<OpenBountyListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +85,7 @@ export function useBountyList(accountAddress?: string | null) {
         const count = (await contract.bountyCount()) as bigint;
         const ids = getBountyIds(count);
         const now = Math.floor(Date.now() / 1000);
+        const metadataById = await getMetadataBatch(ids);
         const loaded: OpenBountyListItem[] = [];
 
         for (let start = 0; start < ids.length; start += BOUNTY_BATCH_SIZE) {
@@ -100,7 +101,7 @@ export function useBountyList(accountAddress?: string | null) {
               return;
             }
 
-            const metadata = getMetadata(id);
+            const metadata = metadataById[id];
             loaded.push({
               id,
               poster: data[0],
@@ -130,7 +131,7 @@ export function useBountyList(accountAddress?: string | null) {
 
     inFlightFetchRef.current = request;
     return request;
-  }, [getMetadata]);
+  }, [getMetadataBatch]);
 
   useEffect(() => {
     return () => {

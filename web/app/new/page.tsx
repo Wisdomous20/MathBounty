@@ -99,7 +99,7 @@ export default function NewBountyPage() {
     disconnect,
     switchNetwork,
   } = useWallet();
-  const { setMetadata } = useBountyMetadata();
+  const { saveMetadata } = useBountyMetadata();
   const isConnected = state === "connected";
 
   /* ---------- Wallet balance ---------- */
@@ -319,19 +319,26 @@ export default function NewBountyPage() {
 
       const bountyId = getPostedBountyId(receipt);
 
-      // Store off-chain metadata
-      setMetadata(bountyId, {
-        title: title.trim(),
-        description: description.trim(),
-        difficulty,
-        tags: tagList,
-        solverStake: solverStake || undefined,
-      });
+      let metadataPersisted = true;
+
+      try {
+        await saveMetadata(bountyId, receipt.hash, {
+          title: title.trim(),
+          description: description.trim(),
+          difficulty,
+          tags: tagList,
+          solverStake: solverStake || undefined,
+        });
+      } catch {
+        metadataPersisted = false;
+      }
 
       showToast(
-        "success",
-        "Bounty Posted",
-        `Bounty #${bountyId} created successfully`
+        metadataPersisted ? "success" : "warning",
+        metadataPersisted ? "Bounty Posted" : "Bounty Posted With Warning",
+        metadataPersisted
+          ? `Bounty #${bountyId} created successfully`
+          : `Bounty #${bountyId} was posted on-chain, but shared metadata could not be saved.`
       );
       router.push(`/bounty/${bountyId}`);
     } catch (err: unknown) {
