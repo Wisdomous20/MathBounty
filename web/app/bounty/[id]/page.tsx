@@ -71,7 +71,7 @@ export default function BountyDetailPage() {
   const params = useParams();
   const idParam = params?.id;
   const bountyId = Array.isArray(idParam) ? idParam[0] : idParam;
-  const { getMetadataBatch } = useBountyMetadata();
+  const { getMetadata, getMetadataBatch, syncMetadataToServer } = useBountyMetadata();
   const { state, address, signer, connect, disconnect, switchNetwork } = useWallet();
   const [bounty, setBounty] = useState<BountyTuple | null>(null);
   const [metadata, setMetadata] = useState<BountyMetadata | null>(null);
@@ -90,6 +90,36 @@ export default function BountyDetailPage() {
   const showToast = useCallback((next: Omit<ToastState, "visible">) => {
     setToast({ visible: true, ...next });
   }, []);
+
+  const repairSharedMetadata = useCallback(
+    async (contract: ethers.Contract) => {
+      if (!bountyId) {
+        return;
+      }
+
+      const cached = getMetadata(bountyId);
+      if (!cached) {
+        return;
+      }
+
+      const postedEvents = await contract.queryFilter(
+        contract.filters.BountyPosted(BigInt(bountyId)),
+        MATH_BOUNTY_DEPLOY_BLOCK || 0
+      );
+      const postedEvent = postedEvents.at(-1);
+
+      if (!postedEvent) {
+        return;
+      }
+
+      try {
+        await syncMetadataToServer(bountyId, postedEvent.transactionHash);
+      } catch {
+        // Leave the UI usable even if background repair fails.
+      }
+    },
+    [bountyId, getMetadata, syncMetadataToServer]
+  );
 
   const loadBounty = useCallback(async () => {
     if (!bountyId || Number.isNaN(Number(bountyId))) {
@@ -120,6 +150,7 @@ export default function BountyDetailPage() {
       setError(null);
       const metadataById = await getMetadataBatch([bountyId]);
       setMetadata(metadataById[bountyId] ?? null);
+      await repairSharedMetadata(contract);
 
       const chainBountyId = BigInt(bountyId);
       const solvedEvents = await contract.queryFilter(
@@ -141,7 +172,7 @@ export default function BountyDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [bountyId, getMetadataBatch]);
+  }, [bountyId, getMetadataBatch, repairSharedMetadata]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
