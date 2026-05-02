@@ -10,22 +10,27 @@ export interface BountyMetadata {
   solverStake?: string;
 }
 
+type CachedBountyMetadata = BountyMetadata & {
+  txHash?: string;
+  syncedAt?: number;
+};
+
 const STORAGE_KEY = "mathbounty-metadata";
 
-function readAllCachedMetadata(): Record<string, BountyMetadata> {
+function readAllCachedMetadata(): Record<string, CachedBountyMetadata> {
   if (typeof window === "undefined") return {};
 
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") as Record<
       string,
-      BountyMetadata
+      CachedBountyMetadata
     >;
   } catch {
     return {};
   }
 }
 
-function writeAllCachedMetadata(all: Record<string, BountyMetadata>) {
+function writeAllCachedMetadata(all: Record<string, CachedBountyMetadata>) {
   if (typeof window === "undefined") return;
 
   try {
@@ -35,9 +40,32 @@ function writeAllCachedMetadata(all: Record<string, BountyMetadata>) {
   }
 }
 
-function cacheMetadataEntry(bountyId: string, metadata: BountyMetadata) {
+function toPublicMetadata(
+  metadata: CachedBountyMetadata | BountyMetadata | null | undefined
+): BountyMetadata | null {
+  if (!metadata) return null;
+
+  return {
+    title: metadata.title,
+    description: metadata.description,
+    difficulty: metadata.difficulty,
+    tags: metadata.tags,
+    solverStake: metadata.solverStake,
+  };
+}
+
+function cacheMetadataEntry(
+  bountyId: string,
+  metadata: BountyMetadata,
+  txHash?: string,
+  syncedAt?: number
+) {
   const all = readAllCachedMetadata();
-  all[bountyId] = metadata;
+  all[bountyId] = {
+    ...metadata,
+    txHash: txHash || all[bountyId]?.txHash,
+    syncedAt: syncedAt ?? all[bountyId]?.syncedAt,
+  };
   writeAllCachedMetadata(all);
 }
 
@@ -67,7 +95,7 @@ async function fetchMetadataBatchFromApi(ids: string[]) {
 export function useBountyMetadata() {
   const getMetadata = useCallback((bountyId: string): BountyMetadata | null => {
     const all = readAllCachedMetadata();
-    return all[bountyId] ?? null;
+    return toPublicMetadata(all[bountyId]);
   }, []);
 
   const getMetadataBatch = useCallback(async (bountyIds: string[]) => {
@@ -80,24 +108,40 @@ export function useBountyMetadata() {
         const shared = await fetchMetadataBatchFromApi(missingIds);
 
         if (Object.keys(shared).length > 0) {
-          writeAllCachedMetadata({ ...cached, ...shared });
+          const merged = { ...cached };
+
+          Object.entries(shared).forEach(([id, metadata]) => {
+            merged[id] = {
+              ...metadata,
+              txHash: merged[id]?.txHash,
+              syncedAt: merged[id]?.syncedAt,
+            };
+          });
+
+          writeAllCachedMetadata(merged);
         }
 
         return {
-          ...cached,
+          ...Object.fromEntries(
+            Object.entries(cached).map(([id, metadata]) => [id, toPublicMetadata(metadata)])
+          ),
           ...shared,
         } as Record<string, BountyMetadata>;
       } catch {
-        return cached;
+        return Object.fromEntries(
+          Object.entries(cached).map(([id, metadata]) => [id, toPublicMetadata(metadata)])
+        ) as Record<string, BountyMetadata>;
       }
     }
 
-    return cached;
+    return Object.fromEntries(
+      Object.entries(cached).map(([id, metadata]) => [id, toPublicMetadata(metadata)])
+    ) as Record<string, BountyMetadata>;
   }, []);
 
   const saveMetadata = useCallback(
     async (bountyId: string, txHash: string, metadata: BountyMetadata) => {
-      cacheMetadataEntry(bountyId, metadata);
+      cacheMetadataEntry(bountyId, metadata, txHash);
 
       const response = await fetch("/api/bounty-metadata", {
         method: "POST",
@@ -118,13 +162,32 @@ export function useBountyMetadata() {
 
         throw new Error(payload?.error || "Failed to persist bounty metadata.");
       }
+
+      cacheMetadataEntry(bountyId, metadata, txHash, Date.now());
     },
     []
+  );
+
+  const syncMetadataToServer = useCallback(
+    async (bountyId: string, txHash?: string) => {
+      const cached = readAllCachedMetadata()[bountyId];
+      const metadata = toPublicMetadata(cached);
+      const resolvedTxHash = txHash || cached?.txHash;
+
+      if (!metadata || !resolvedTxHash) {
+        return false;
+      }
+
+      await saveMetadata(bountyId, resolvedTxHash, metadata);
+      return true;
+    },
+    [saveMetadata]
   );
 
   return {
     getMetadata,
     getMetadataBatch,
     saveMetadata,
+    syncMetadataToServer,
   };
 }
