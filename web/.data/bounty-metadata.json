@@ -1,4 +1,13 @@
 {
+  "4": {
+    "title": "Hatdog",
+    "description": "wayne abnoy",
+    "difficulty": "Hard",
+    "tags": [
+      "Janiuay"
+    ],
+    "solverStake": "0.0001"
+  },
   "14": {
     "title": "1+1",
     "description": "what is the answer",
@@ -10,5 +19,14 @@
     "description": "404",
     "difficulty": "Medium",
     "tags": []
+  },
+  "24": {
+    "title": "bounty #67",
+    "description": "dont solve this",
+    "difficulty": "Hard",
+    "tags": [
+      "test"
+    ],
+    "solverStake": "0.0001"
   }
 }
