@@ -52,6 +52,7 @@ export default function Home() {
 	const [statsLoading, setStatsLoading] = useState(true);
 	const [bountiesLoading, setBountiesLoading] = useState(true);
 	const [fetchError, setFetchError] = useState<string | null>(null);
+	const [retryCount, setRetryCount] = useState(0);
 
 	const handleConnect = async () => {
 		const connectedAddress = await connect();
@@ -89,10 +90,9 @@ export default function Home() {
 					return;
 				}
 
-				// Build IDs from newest down, limit to 50
+				// Build IDs from newest down — query all bounties for accurate stats
 				const allIds: string[] = [];
-				const limit = count > BigInt(50) ? BigInt(50) : count;
-				for (let i = BigInt(0); i < limit; i++) {
+				for (let i = BigInt(0); i < count; i++) {
 					allIds.push((count - i).toString());
 				}
 
@@ -109,10 +109,14 @@ export default function Home() {
 							allBounties.push({ id: chunkIds[idx], tuple });
 						});
 					} catch {
-						// Fallback to individual calls
+						// Fallback to individual calls — skip any that fail
 						for (const id of chunkIds) {
-							const tuple = (await contract.getBounty(id)) as BountyTuple;
-							allBounties.push({ id, tuple });
+							try {
+								const tuple = (await contract.getBounty(id)) as BountyTuple;
+								allBounties.push({ id, tuple });
+							} catch {
+								// Skip this bounty on transient RPC failure
+							}
 						}
 					}
 				}
@@ -218,7 +222,7 @@ export default function Home() {
 		return () => {
 			cancelled = true;
 		};
-	}, [getMetadataBatch]);
+	}, [getMetadataBatch, retryCount]);
 
 	const handleRetry = () => {
 		setFetchError(null);
@@ -226,8 +230,7 @@ export default function Home() {
 		setBountiesLoading(true);
 		setStats(null);
 		setTopBounties(null);
-		// Re-trigger effect by toggling a dummy state or re-mounting; simpler to reload page
-		window.location.reload();
+		setRetryCount((c) => c + 1);
 	};
 
 	return (
@@ -263,7 +266,7 @@ export default function Home() {
 							Mechanism
 						</Link>
 						<Link
-							href="#docs"
+							href="#mechanism"
 							className="hover:text-brand active:opacity-70 transition-all duration-fast"
 						>
 							Docs
@@ -685,7 +688,7 @@ export default function Home() {
 									Start Solving
 								</Link>
 								<Link
-									href="#docs"
+									href="#mechanism"
 									className="font-mono text-sm text-ink-muted hover:text-brand transition-colors duration-fast uppercase tracking-widest hidden sm:inline-flex"
 								>
 									Read docs →
@@ -726,7 +729,7 @@ export default function Home() {
 								GitHub
 							</Link>
 							<Link
-								href="#docs"
+								href="#mechanism"
 								className="hover:text-brand active:opacity-70 transition-all"
 							>
 								Docs
