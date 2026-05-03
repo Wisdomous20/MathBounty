@@ -9,6 +9,7 @@ interface BountyCardProps extends React.HTMLAttributes<HTMLDivElement> {
   deadline: string;
   description?: string;
   proposer?: string;
+  id?: string;
 }
 
 export function BountyCard({
@@ -18,6 +19,7 @@ export function BountyCard({
   deadline,
   description,
   proposer,
+  id,
   className,
   ...props
 }: BountyCardProps) {
@@ -35,7 +37,11 @@ export function BountyCard({
     >
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-lg font-semibold text-ink font-display uppercase tracking-wider leading-tight">
-          {title}
+          {title || (
+            <span className="text-ink-faint">
+              Bounty #{id}
+            </span>
+          )}
         </h3>
         <Badge variant={status === "Expired" ? "error" : status === "Open" ? "success" : status === "Claimed" ? "warning" : "success"}>
           {statusConfig.label}

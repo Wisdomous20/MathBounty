@@ -102,7 +102,7 @@ export function useUserBounties(accountAddress?: string | null) {
             reward: state[2],
             expiresAt: state[3],
             status: Number(state[4]),
-            title: metadata?.title || `Bounty #${id}`,
+            title: metadata?.title || "",
           };
         });
 
