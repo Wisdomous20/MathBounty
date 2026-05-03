@@ -6,6 +6,7 @@ import { ethers } from "ethers";
 import { useWallet } from "@/lib/use-wallet";
 import { useUserBounties, UserBountyItem } from "@/lib/use-user-bounties";
 import { BOUNTY_STATUS, canReclaimExpiredBounty } from "@/lib/bounty-state";
+import { reclaimBountyEscrow } from "@/lib/reclaim-bounty";
 import { Button } from "@/components/ui/button";
 import { ConnectWalletPrompt } from "@/components/ui/connect-wallet-prompt";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -21,16 +22,18 @@ import { decodeContractError } from "@/lib/decode-revert";
 function BountyListItem({
   bounty,
   nowSeconds,
+  connectedAddress,
   onReclaim,
   reclaiming,
 }: {
   bounty: UserBountyItem;
   nowSeconds: number;
+  connectedAddress: string | null;
   onReclaim: (id: string) => void;
   reclaiming: string | null;
 }) {
-  const isExpired = Number(bounty.expiresAt) <= nowSeconds;
-  const canReclaim = bounty.status === BOUNTY_STATUS.Open && isExpired;
+  const isExpired = Number(bounty.expiresAt) < nowSeconds;
+  const canReclaim = canReclaimExpiredBounty(bounty, connectedAddress, nowSeconds);
   
   const statusConfig = {
     [BOUNTY_STATUS.Open]: isExpired 
@@ -115,7 +118,7 @@ export default function MyPostsPage() {
     try {
       await assertMathBountyContract(signer.provider);
       const contract = new ethers.Contract(MATH_BOUNTY_ADDRESS, MATH_BOUNTY_ABI, signer);
-      const tx = await contract.reclaimExpired(BigInt(id));
+      const tx = await reclaimBountyEscrow(contract, BigInt(id));
       const receipt = await tx.wait();
       
       setToast({
@@ -177,9 +180,9 @@ export default function MyPostsPage() {
     );
   }
 
-  const openPosts = bounties.filter(b => b.status === BOUNTY_STATUS.Open && Number(b.expiresAt) > nowSeconds);
+  const openPosts = bounties.filter(b => b.status === BOUNTY_STATUS.Open && Number(b.expiresAt) >= nowSeconds);
   const paidPosts = bounties.filter(b => b.status === BOUNTY_STATUS.Paid);
-  const expiredPosts = bounties.filter(b => b.status === BOUNTY_STATUS.Expired || (b.status === BOUNTY_STATUS.Open && Number(b.expiresAt) <= nowSeconds));
+  const expiredPosts = bounties.filter(b => b.status === BOUNTY_STATUS.Expired || (b.status === BOUNTY_STATUS.Open && Number(b.expiresAt) < nowSeconds));
 
   return (
     <div className="space-y-12">
@@ -192,6 +195,7 @@ export default function MyPostsPage() {
                 key={b.id} 
                 bounty={b} 
                 nowSeconds={nowSeconds} 
+                connectedAddress={address}
                 onReclaim={handleReclaim}
                 reclaiming={reclaiming}
               />
@@ -209,6 +213,7 @@ export default function MyPostsPage() {
                 key={b.id} 
                 bounty={b} 
                 nowSeconds={nowSeconds} 
+                connectedAddress={address}
                 onReclaim={handleReclaim}
                 reclaiming={reclaiming}
               />
@@ -226,6 +231,7 @@ export default function MyPostsPage() {
                 key={b.id} 
                 bounty={b} 
                 nowSeconds={nowSeconds} 
+                connectedAddress={address}
                 onReclaim={handleReclaim}
                 reclaiming={reclaiming}
               />
