@@ -30,23 +30,8 @@ export async function reclaimBountyEscrow(
   contract: ethers.Contract,
   bountyId: bigint
 ) {
-  try {
-    return await contract.claimRefund(bountyId);
-  } catch (claimRefundError) {
-    if (!isMissingRevertDataError(claimRefundError)) {
-      throw claimRefundError;
-    }
-  }
-
-  try {
-    return await contract.reclaimExpired(bountyId);
-  } catch (reclaimExpiredError) {
-    if (isMissingRevertDataError(reclaimExpiredError)) {
-      throw new Error(
-        "The configured MathBounty contract does not support this reclaim method. Check NEXT_PUBLIC_MATH_BOUNTY_ADDRESS and redeploy or point the app at a compatible contract."
-      );
-    }
-
-    throw reclaimExpiredError;
-  }
+  // The contract exposes both reclaimExpired() and claimRefund(), but both
+  // map to the same internal _reclaimExpired() logic. We use reclaimExpired()
+  // as the canonical method to avoid the confusing fallback chain.
+  return await contract.reclaimExpired(bountyId);
 }

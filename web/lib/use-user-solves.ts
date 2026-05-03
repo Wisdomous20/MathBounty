@@ -93,7 +93,7 @@ export function useUserSolves(accountAddress?: string | null) {
               solver: event.args.solver,
               timestamp: block ? block.timestamp * 1000 : 0,
               txHash: event.transactionHash,
-              title: metadata?.title || `Bounty #${bountyId}`,
+              title: metadata?.title || "",
             };
           })
         );

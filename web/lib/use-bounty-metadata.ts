@@ -17,7 +17,7 @@ type CachedBountyMetadata = BountyMetadata & {
 
 const STORAGE_KEY = "mathbounty-metadata";
 
-function readAllCachedMetadata(): Record<string, CachedBountyMetadata> {
+export function readAllCachedMetadata(): Record<string, CachedBountyMetadata> {
   if (typeof window === "undefined") return {};
 
   try {
@@ -135,24 +135,28 @@ export function useBountyMetadata() {
     try {
       const shared = await fetchMetadataBatchFromApi(uniqueIds);
 
-      if (Object.keys(shared).length > 0) {
-        const merged = { ...cached };
+      const merged = { ...cached };
 
-        Object.entries(shared).forEach(([id, metadata]) => {
+      uniqueIds.forEach((id) => {
+        const s = shared[id];
+        const c = cached[id];
+        if (s) {
           merged[id] = {
-            ...metadata,
-            txHash: merged[id]?.txHash,
-            syncedAt: merged[id]?.syncedAt,
+            ...s,
+            txHash: c?.txHash || merged[id]?.txHash,
+            syncedAt: c?.syncedAt || merged[id]?.syncedAt,
+            title: s.title || c?.title || "",
+            description: s.description || c?.description || "",
+            difficulty: s.difficulty || c?.difficulty || "",
+            tags: s.tags?.length ? s.tags : c?.tags?.length ? c.tags : [],
+            solverStake: s.solverStake || c?.solverStake,
           };
-        });
+        }
+      });
 
-        writeAllCachedMetadata(merged);
-      }
+      writeAllCachedMetadata(merged);
 
-      return {
-        ...toPublicMetadataRecord(cached),
-        ...shared,
-      };
+      return toPublicMetadataRecord(merged);
     } catch {
       const fallback = toPublicMetadataRecord(cachedForRequestedIds);
 
