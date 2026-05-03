@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { ethers } from "ethers";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
@@ -71,6 +71,8 @@ export default function BountyDetailPage() {
   const params = useParams();
   const idParam = params?.id;
   const bountyId = Array.isArray(idParam) ? idParam[0] : idParam;
+  const searchParams = useSearchParams();
+  const fromCreate = searchParams.get("from") === "create";
   const { getMetadata, getMetadataBatch, syncMetadataToServer } = useBountyMetadata();
   const { state, address, signer, connect, disconnect, switchNetwork } = useWallet();
   const [bounty, setBounty] = useState<BountyTuple | null>(null);
@@ -86,6 +88,10 @@ export default function BountyDetailPage() {
     variant: "info",
     title: "",
   });
+  const [submissionResult, setSubmissionResult] = useState<{
+    type: "correct" | "incorrect";
+    payout: string;
+  } | null>(null);
 
   const showToast = useCallback((next: Omit<ToastState, "visible">) => {
     setToast({ visible: true, ...next });
@@ -239,6 +245,7 @@ export default function BountyDetailPage() {
       const tx = await contract.submitAnswer(BigInt(bountyId), cleaned);
       const receipt = await tx.wait();
       const payout = bounty ? formatReward(bounty[2]) : "0 ETH";
+      setSubmissionResult({ type: "correct", payout });
       showToast({
         variant: "success",
         title: "Reward Claimed",
@@ -248,6 +255,9 @@ export default function BountyDetailPage() {
       await loadBounty();
     } catch (err: unknown) {
       const decoded = decodeContractError(err);
+      if (decoded.title === "Wrong Answer") {
+        setSubmissionResult({ type: "incorrect", payout: "0" });
+      }
       showToast({
         variant: decoded.variant,
         title: decoded.title,
@@ -305,6 +315,21 @@ export default function BountyDetailPage() {
         </div>
       </header>
 
+      {fromCreate && (
+        <div className="bg-brand text-surface">
+          <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+            <span className="font-mono text-xs uppercase tracking-[0.2em] font-bold">
+              Bounty posted successfully
+            </span>
+            <Link
+              href="/bounties"
+              className="inline-flex items-center justify-center px-4 py-2 text-xs font-bold tracking-widest uppercase bg-surface text-brand hover:bg-surface-raised transition-colors duration-fast"
+            >
+              ← Back to all bounties
+            </Link>
+          </div>
+        </div>
+      )}
       <main className="flex-1 reveal-container">
         <section className="max-w-7xl mx-auto px-6 py-12 md:py-16 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
           <div className="lg:col-span-7 space-y-6">
@@ -316,7 +341,11 @@ export default function BountyDetailPage() {
                 className="font-display font-bold text-ink leading-[0.9] tracking-tight uppercase"
                 style={{ fontSize: "clamp(2.5rem, 6vw, 5rem)" }}
               >
-                {metadata?.title || `Bounty #${bountyId}`}
+                {metadata?.title || (
+                  <span className="text-ink-faint">
+                    Bounty #{bountyId}
+                  </span>
+                )}
               </h1>
               <p className="mt-4 max-w-[72ch] text-ink-muted">
                 {metadata?.description || "On-chain bounty, solve correctly to receive the escrowed reward."}
@@ -347,6 +376,11 @@ export default function BountyDetailPage() {
                   <p className="text-ink-muted">
                     This bounty expired before a valid solution was submitted.
                   </p>
+                  {isPoster && (
+                    <p className="text-xs text-ink-faint font-mono leading-relaxed">
+                      This bounty has expired. As the poster, you can reclaim your escrowed ETH.
+                    </p>
+                  )}
                 </div>
               ) : isPoster ? (
                 <div className="space-y-4">
@@ -368,6 +402,23 @@ export default function BountyDetailPage() {
                 <div className="space-y-4">
                   <div className="font-mono text-xs text-brand uppercase tracking-[0.2em]">Submission</div>
                   <h2 className="font-display text-4xl uppercase">Submit Solution</h2>
+                  {submissionResult?.type === "correct" && (
+                    <div className="border border-success bg-success/10 p-4">
+                      <p className="text-sm text-success font-mono uppercase tracking-wider">
+                        Answer correct — {submissionResult.payout} claimed
+                      </p>
+                    </div>
+                  )}
+                  {submissionResult?.type === "incorrect" && (
+                    <div className="border border-error bg-error/10 p-4">
+                      <p className="text-sm text-error font-mono uppercase tracking-wider">
+                        Answer incorrect — gas fee deducted. Try again.
+                      </p>
+                    </div>
+                  )}
+                  <p className="text-xs text-ink-faint font-mono leading-relaxed">
+                    Submit the exact answer to claim the reward. Incorrect answers will result in a gas fee deduction with no reward.
+                  </p>
                   <Input
                     id="answer"
                     label="Answer"

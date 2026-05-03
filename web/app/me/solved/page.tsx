@@ -71,11 +71,13 @@ export default function MySolvedPage() {
           {solves.map((solve) => (
             <tr key={solve.txHash} className="hover:bg-surface transition-colors">
               <td className="px-6 py-4">
-                <Link 
+                <Link
                   href={`/bounty/${solve.bountyId}`}
                   className="text-ink font-bold hover:text-brand transition-colors"
                 >
-                  {solve.title}
+                  {solve.title || (
+                    <span className="text-ink-faint">Bounty #{solve.bountyId}</span>
+                  )}
                 </Link>
                 <div className="text-[10px] text-ink-faint mt-1">ID: {solve.bountyId}</div>
               </td>

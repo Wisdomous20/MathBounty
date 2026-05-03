@@ -351,7 +351,7 @@ export default function NewBountyPage() {
           : `Bounty #${bountyId} was posted on-chain, but shared metadata could not be saved: ${metadataPersistError ?? "unknown error"}.`
       );
 
-      router.push(`/bounty/${bountyId}`);
+      router.push(`/bounty/${bountyId}?from=create`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       showToast("error", "Transaction Failed", msg);
@@ -480,6 +480,9 @@ export default function NewBountyPage() {
                       rows={6}
                       required
                     />
+                    <p className="text-xs text-ink-faint font-mono leading-relaxed">
+                      Tip: Make your problem statement as complete as possible. Include the exact question, any constraints, and what format the answer should be in. Vague bounties are less likely to be solved.
+                    </p>
                     <div className="flex justify-between">
                       <span
                         className={cn(
@@ -517,6 +520,9 @@ export default function NewBountyPage() {
                         This value is hashed locally using keccak256 before any
                         network call. Only the hash is stored on-chain.
                       </p>
+                      <p className="text-xs text-ink-faint font-mono leading-relaxed">
+                        Only the keccak256 hash of this answer is stored on-chain. Make sure your answer is unambiguous — solvers must match it exactly.
+                      </p>
                     </div>
 
                     <Input
@@ -532,6 +538,9 @@ export default function NewBountyPage() {
                       placeholder={MIN_REWARD_ETH}
                       required
                     />
+                    <p className="text-xs text-ink-faint font-mono leading-relaxed">
+                      This ETH will be locked in the smart contract until the bounty is solved or expires.
+                    </p>
 
                     {/* Expiry selector */}
                     <div className="flex flex-col gap-2">

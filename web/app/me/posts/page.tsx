@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ethers } from "ethers";
 import { useWallet } from "@/lib/use-wallet";
 import { useUserBounties, UserBountyItem } from "@/lib/use-user-bounties";
-import { BOUNTY_STATUS, canReclaimExpiredBounty } from "@/lib/bounty-state";
+import { BOUNTY_STATUS, canReclaimExpiredBounty, getReclaimErrorReason } from "@/lib/bounty-state";
 import { reclaimBountyEscrow } from "@/lib/reclaim-bounty";
 import { Button } from "@/components/ui/button";
 import { ConnectWalletPrompt } from "@/components/ui/connect-wallet-prompt";
@@ -34,7 +34,10 @@ function BountyListItem({
 }) {
   const isExpired = Number(bounty.expiresAt) < nowSeconds;
   const canReclaim = canReclaimExpiredBounty(bounty, connectedAddress, nowSeconds);
-  
+  const isPoster = connectedAddress?.toLowerCase() === bounty.poster.toLowerCase();
+  const showReclaim = isPoster && (bounty.status === BOUNTY_STATUS.Expired || isExpired);
+  const reclaimReason = getReclaimErrorReason(bounty, nowSeconds, connectedAddress);
+
   const statusConfig = {
     [BOUNTY_STATUS.Open]: isExpired 
       ? { label: "Expired", variant: "default" as const }
@@ -53,7 +56,9 @@ function BountyListItem({
           <Badge variant={config.variant}>{config.label}</Badge>
         </div>
         <h3 className="font-display text-xl font-bold uppercase tracking-tight text-ink mb-1">
-          {bounty.title}
+          {bounty.title || (
+            <span className="text-ink-faint">Bounty #{bounty.id}</span>
+          )}
         </h3>
         <div className="flex flex-wrap gap-x-6 gap-y-1 font-mono text-xs text-ink-muted">
           <span>Reward: {ethers.formatEther(bounty.reward)} ETH</span>
@@ -72,11 +77,13 @@ function BountyListItem({
         >
           View Details
         </Link>
-        {canReclaim && (
+        {showReclaim && (
           <Button
             size="sm"
             onClick={() => onReclaim(bounty.id)}
             isLoading={reclaiming === bounty.id}
+            disabled={!canReclaim}
+            title={reclaimReason || "Cannot reclaim"}
           >
             Reclaim ETH
           </Button>
@@ -129,13 +136,36 @@ export default function MyPostsPage() {
       });
       void retry();
     } catch (err: unknown) {
-      const decoded = decodeContractError(err);
-      setToast({
-        visible: true,
-        variant: "error",
-        title: decoded.title,
-        description: decoded.description,
-      });
+      // Re-fetch bounty state to detect race conditions (e.g., already reclaimed)
+      try {
+        const readContract = new ethers.Contract(MATH_BOUNTY_ADDRESS, MATH_BOUNTY_ABI, signer.provider);
+        const data = await readContract.getBounty(BigInt(id));
+        const status = Number(data[4]);
+        if (status === BOUNTY_STATUS.Expired) {
+          setToast({
+            visible: true,
+            variant: "error",
+            title: "Already Reclaimed",
+            description: "This bounty was already reclaimed.",
+          });
+        } else {
+          const decoded = decodeContractError(err);
+          setToast({
+            visible: true,
+            variant: "error",
+            title: decoded.title,
+            description: decoded.description,
+          });
+        }
+      } catch {
+        const decoded = decodeContractError(err);
+        setToast({
+          visible: true,
+          variant: "error",
+          title: decoded.title,
+          description: decoded.description,
+        });
+      }
     } finally {
       setReclaiming(null);
     }
