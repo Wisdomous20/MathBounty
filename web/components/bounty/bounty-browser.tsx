@@ -200,6 +200,7 @@ export function BountyBrowser() {
                         reward={formatReward(bounty.reward)}
                         deadline={formatCountdown(bounty.expiresAt, nowSeconds)}
                         proposer={bounty.poster}
+                        id={bounty.id}
                         className="h-full border-2 hover:border-brand"
                       />
                     </Link>
