@@ -24,6 +24,10 @@ Fonts ([Bebas Neue](https://fonts.google.com/specimen/Bebas+Neue), [DM Sans](htt
 
 - **Design system** — With the dev server running, open [http://localhost:3000/design-system](http://localhost:3000/design-system). That route is the living documentation for tokens (`lib/tokens.ts`) and UI components (`components/ui/`); use it before building new UI. On Vercel previews, append `/design-system` to the deployment URL.
 
+## Metadata storage
+
+Bounty metadata is stored in Supabase Postgres in production. See [docs/supabase-metadata.md](docs/supabase-metadata.md) for the SQL, Vercel environment variables, and migration notes.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

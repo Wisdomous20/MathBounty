@@ -1,6 +1,7 @@
+import "server-only";
+
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { get, put } from "@vercel/blob";
 
 type BountyMetadata = {
   title: string;
@@ -11,27 +12,35 @@ type BountyMetadata = {
 };
 
 type MetadataStore = Record<string, BountyMetadata>;
-type BlobAccess = "public" | "private";
+type SupabaseMetadataRow = {
+  bounty_id: string;
+  title: string;
+  description: string;
+  difficulty: string;
+  tags: string[] | null;
+  solver_stake: string | null;
+};
 
 const METADATA_FILE_PATH = path.join(
   process.cwd(),
   ".data",
   "bounty-metadata.json"
 );
-const BLOB_PREFIX = "bounty-metadata";
-const DEFAULT_BLOB_ACCESS: BlobAccess =
-  process.env.BLOB_ACCESS === "private" ? "private" : "public";
+const SUPABASE_URL = (
+  process.env.SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  ""
+).replace(/\/+$/, "");
+const SUPABASE_SECRET_KEY =
+  process.env.SUPABASE_SECRET_KEY ||
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  "";
+const SUPABASE_METADATA_SELECT =
+  "bounty_id,title,description,difficulty,tags,solver_stake";
+const SUPABASE_READ_CHUNK_SIZE = 100;
 
-function getBlobPath(bountyId: string) {
-  return `${BLOB_PREFIX}/${bountyId}.json`;
-}
-
-function getAlternateBlobAccess(access: BlobAccess): BlobAccess {
-  return access === "private" ? "public" : "private";
-}
-
-function canUseBlobStorage() {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+function canUseSupabase() {
+  return Boolean(SUPABASE_URL && SUPABASE_SECRET_KEY);
 }
 
 function canUseLocalFileFallback() {
@@ -39,9 +48,9 @@ function canUseLocalFileFallback() {
 }
 
 function assertPersistentStoreConfigured() {
-  if (!canUseBlobStorage() && !canUseLocalFileFallback()) {
+  if (!canUseSupabase() && !canUseLocalFileFallback()) {
     throw new Error(
-      "Persistent metadata storage is not configured. Set BLOB_READ_WRITE_TOKEN in Vercel."
+      "Persistent metadata storage is not configured. Set SUPABASE_URL and SUPABASE_SECRET_KEY in Vercel."
     );
   }
 }
@@ -70,76 +79,132 @@ async function readLocalMetadataStore(): Promise<MetadataStore> {
 
 async function writeLocalMetadataStore(store: MetadataStore) {
   await ensureMetadataFile();
-  await writeFile(METADATA_FILE_PATH, JSON.stringify(store, null, 2) + "\n", "utf8");
+  await writeFile(
+    METADATA_FILE_PATH,
+    JSON.stringify(store, null, 2) + "\n",
+    "utf8"
+  );
 }
 
-async function readBlobMetadataWithAccess(bountyId: string, access: BlobAccess) {
-  const pathname = getBlobPath(bountyId);
-  const result = await get(pathname, {
-    access,
-    useCache: false,
+function getSupabaseUrl(params: URLSearchParams) {
+  return `${SUPABASE_URL}/rest/v1/bounty_metadata?${params.toString()}`;
+}
+
+function getSupabaseHeaders(headers?: HeadersInit): HeadersInit {
+  return {
+    apikey: SUPABASE_SECRET_KEY,
+    Authorization: `Bearer ${SUPABASE_SECRET_KEY}`,
+    ...headers,
+  };
+}
+
+function toSupabaseRow(bountyId: string, metadata: BountyMetadata) {
+  return {
+    bounty_id: bountyId,
+    title: metadata.title,
+    description: metadata.description,
+    difficulty: metadata.difficulty,
+    tags: metadata.tags,
+    solver_stake: metadata.solverStake ?? null,
+  };
+}
+
+function fromSupabaseRow(row: SupabaseMetadataRow): BountyMetadata {
+  return {
+    title: row.title,
+    description: row.description,
+    difficulty: row.difficulty,
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    solverStake: row.solver_stake ?? undefined,
+  };
+}
+
+async function assertSupabaseResponse(response: Response) {
+  if (response.ok) {
+    return;
+  }
+
+  if (response.status === 409) {
+    throw new Error("Metadata already exists for this bounty.");
+  }
+
+  throw new Error(`Supabase metadata request failed with status ${response.status}.`);
+}
+
+async function readSupabaseMetadata(bountyId: string) {
+  const params = new URLSearchParams({
+    select: SUPABASE_METADATA_SELECT,
+    bounty_id: `eq.${bountyId}`,
+    limit: "1",
+  });
+  const response = await fetch(getSupabaseUrl(params), {
+    headers: getSupabaseHeaders(),
+    cache: "no-store",
   });
 
-  if (!result || result.statusCode !== 200) {
-    return null;
-  }
+  await assertSupabaseResponse(response);
 
-  return (await new Response(result.stream).json()) as BountyMetadata;
+  const rows = (await response.json()) as SupabaseMetadataRow[];
+  return rows[0] ? fromSupabaseRow(rows[0]) : null;
 }
 
-async function readBlobMetadata(bountyId: string) {
-  try {
-    const metadata = await readBlobMetadataWithAccess(
-      bountyId,
-      DEFAULT_BLOB_ACCESS
-    );
+async function readManySupabaseMetadata(bountyIds: string[]) {
+  const uniqueIds = Array.from(new Set(bountyIds));
+  const chunks = Array.from(
+    { length: Math.ceil(uniqueIds.length / SUPABASE_READ_CHUNK_SIZE) },
+    (_, index) =>
+      uniqueIds.slice(
+        index * SUPABASE_READ_CHUNK_SIZE,
+        (index + 1) * SUPABASE_READ_CHUNK_SIZE
+      )
+  );
 
-    if (metadata) {
-      return metadata;
-    }
-  } catch {
-    // Try the alternate access mode below.
-  }
+  const rows = (
+    await Promise.all(
+      chunks.map(async (chunk) => {
+        const params = new URLSearchParams({
+          select: SUPABASE_METADATA_SELECT,
+          bounty_id: `in.(${chunk.join(",")})`,
+        });
+        const response = await fetch(getSupabaseUrl(params), {
+          headers: getSupabaseHeaders(),
+          cache: "no-store",
+        });
 
-  try {
-    const metadata = await readBlobMetadataWithAccess(
-      bountyId,
-      getAlternateBlobAccess(DEFAULT_BLOB_ACCESS)
-    );
+        await assertSupabaseResponse(response);
+        return (await response.json()) as SupabaseMetadataRow[];
+      })
+    )
+  ).flat();
 
-    if (metadata) {
-      return metadata;
-    }
-  } catch {
-    // Treat blob fetch failures as missing metadata so one bad read
-    // does not break the entire metadata batch request.
-  }
-
-  return null;
+  return rows.reduce<Record<string, BountyMetadata>>((acc, row) => {
+    acc[row.bounty_id] = fromSupabaseRow(row);
+    return acc;
+  }, {});
 }
 
-async function writeBlobMetadataWithAccess(
+async function writeSupabaseMetadata(
   bountyId: string,
-  metadata: BountyMetadata,
-  access: BlobAccess
+  metadata: BountyMetadata
 ) {
-  await put(getBlobPath(bountyId), JSON.stringify(metadata), {
-    access,
-    allowOverwrite: true,
-    addRandomSuffix: false,
-    contentType: "application/json",
-    cacheControlMaxAge: 60,
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/bounty_metadata`, {
+    method: "POST",
+    headers: getSupabaseHeaders({
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    }),
+    body: JSON.stringify(toSupabaseRow(bountyId, metadata)),
   });
+
+  await assertSupabaseResponse(response);
 }
 
-async function writeBlobMetadata(bountyId: string, metadata: BountyMetadata) {
-  try {
-    await writeBlobMetadataWithAccess(bountyId, metadata, DEFAULT_BLOB_ACCESS);
-  } catch {
-    await writeBlobMetadataWithAccess(
-      bountyId,
-      metadata,
-      getAlternateBlobAccess(DEFAULT_BLOB_ACCESS)
+async function assertSupabaseMetadataReadable(bountyId: string) {
+  const metadata = await readSupabaseMetadata(bountyId);
+
+  if (!metadata) {
+    throw new Error(
+      "Metadata was written but could not be read back from Supabase. Check SUPABASE_URL, SUPABASE_SECRET_KEY, and the bounty_metadata table."
     );
   }
 }
@@ -147,8 +212,8 @@ async function writeBlobMetadata(bountyId: string, metadata: BountyMetadata) {
 export async function readBountyMetadata(bountyId: string) {
   assertPersistentStoreConfigured();
 
-  if (canUseBlobStorage()) {
-    return readBlobMetadata(bountyId);
+  if (canUseSupabase()) {
+    return readSupabaseMetadata(bountyId);
   }
 
   if (canUseLocalFileFallback()) {
@@ -162,23 +227,8 @@ export async function readBountyMetadata(bountyId: string) {
 export async function readManyBountyMetadata(bountyIds: string[]) {
   assertPersistentStoreConfigured();
 
-  if (canUseBlobStorage()) {
-    const entries = await Promise.allSettled(
-      bountyIds.map(async (id) => [id, await readBlobMetadata(id)] as const)
-    );
-
-    return entries.reduce<Record<string, BountyMetadata>>((acc, entry) => {
-      if (entry.status !== "fulfilled") {
-        return acc;
-      }
-
-      const [id, metadata] = entry.value;
-      if (metadata) {
-        acc[id] = metadata;
-      }
-
-      return acc;
-    }, {});
+  if (canUseSupabase()) {
+    return readManySupabaseMetadata(bountyIds);
   }
 
   if (canUseLocalFileFallback()) {
@@ -195,11 +245,15 @@ export async function readManyBountyMetadata(bountyIds: string[]) {
   return {};
 }
 
-export async function writeBountyMetadata(bountyId: string, metadata: BountyMetadata) {
+export async function writeBountyMetadata(
+  bountyId: string,
+  metadata: BountyMetadata
+) {
   assertPersistentStoreConfigured();
 
-  if (canUseBlobStorage()) {
-    await writeBlobMetadata(bountyId, metadata);
+  if (canUseSupabase()) {
+    await writeSupabaseMetadata(bountyId, metadata);
+    await assertSupabaseMetadataReadable(bountyId);
     return;
   }
 
