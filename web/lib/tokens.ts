@@ -75,12 +75,12 @@ export const bountyStatus = {
     description: "A solver has claimed this bounty and is working on it",
   },
   Paid: {
-    label: "Paid",
+    label: "Solved",
     textColor: "text-success",
     bgColor: "bg-success/10",
     borderColor: "border-success",
     hex: colors.success,
-    description: "Bounty has been successfully paid out",
+    description: "Bounty has been successfully solved and paid out",
   },
   Expired: {
     label: "Expired",

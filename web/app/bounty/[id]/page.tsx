@@ -91,7 +91,9 @@ export default function BountyDetailPage() {
   const [submissionResult, setSubmissionResult] = useState<{
     type: "correct" | "incorrect";
     payout: string;
+    txHash?: string;
   } | null>(null);
+  const [isMining, setIsMining] = useState(false);
 
   const showToast = useCallback((next: Omit<ToastState, "visible">) => {
     setToast({ visible: true, ...next });
@@ -233,36 +235,61 @@ export default function BountyDetailPage() {
     if (!cleaned) return;
 
     setSubmitting(true);
+    setSubmissionResult(null);
     showToast({
       variant: "info",
       title: "Submitting",
-      description: "Waiting for wallet signature and chain confirmation.",
+      description: "Waiting for wallet signature.",
     });
 
     try {
       await assertMathBountyContract(signer.provider);
       const contract = new ethers.Contract(MATH_BOUNTY_ADDRESS, MATH_BOUNTY_ABI, signer);
       const tx = await contract.submitSolution(BigInt(bountyId), cleaned);
+      
+      setIsMining(true);
+      showToast({
+        variant: "info",
+        title: "Transaction Sent",
+        description: "Waiting for chain confirmation (mining).",
+      });
+
       const receipt = await tx.wait();
+      setIsMining(false);
+
       const payout = bounty ? formatReward(bounty[2]) : "0 ETH";
-      setSubmissionResult({ type: "correct", payout });
+      setSubmissionResult({ 
+        type: "correct", 
+        payout,
+        txHash: receipt?.hash ?? tx.hash
+      });
+      
       showToast({
         variant: "success",
-        title: "Reward Claimed",
-        description: `${payout} received. Tx: ${receipt?.hash ?? tx.hash}`,
+        title: "Correct Answer!",
+        description: `Reward of ${payout} claimed successfully.`,
       });
+      
       setAnswer("");
       await loadBounty();
     } catch (err: unknown) {
+      setIsMining(false);
       const decoded = decodeContractError(err);
+      
       if (decoded.title === "Wrong Answer") {
         setSubmissionResult({ type: "incorrect", payout: "0" });
+        showToast({
+          variant: "error",
+          title: "Incorrect Answer",
+          description: "Your solution was incorrect. Gas fee was consumed.",
+        });
+      } else {
+        showToast({
+          variant: decoded.variant,
+          title: decoded.title,
+          description: decoded.description,
+        });
       }
-      showToast({
-        variant: decoded.variant,
-        title: decoded.title,
-        description: decoded.description,
-      });
     } finally {
       setSubmitting(false);
     }
@@ -399,40 +426,92 @@ export default function BountyDetailPage() {
                   <Button onClick={() => void connect()}>CONNECT WALLET REQUIRED</Button>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-4 relative overflow-hidden">
                   <div className="font-mono text-xs text-brand uppercase tracking-[0.2em]">Submission</div>
-                  <h2 className="font-display text-4xl uppercase">Submit Solution</h2>
-                  {submissionResult?.type === "correct" && (
-                    <div className="border border-success bg-success/10 p-4">
-                      <p className="text-sm text-success font-mono uppercase tracking-wider">
-                        Answer correct — {submissionResult.payout} claimed
-                      </p>
+                  <h2 className="font-display text-4xl uppercase">
+                    {bountyStatus === BOUNTY_STATUS.Paid ? "Bounty Solved" : "Submit Solution"}
+                  </h2>
+                  
+                  {isMining && (
+                    <div className="absolute inset-0 z-10 bg-surface/80 backdrop-blur-sm flex flex-col items-center justify-center border-2 border-brand border-dashed animate-pulse">
+                      <div className="font-mono text-sm text-brand font-bold uppercase tracking-widest mb-2">
+                        Transaction Mining...
+                      </div>
+                      <div className="text-xs text-ink-faint font-mono">
+                        Waiting for blockchain confirmation
+                      </div>
                     </div>
                   )}
+
+                  {(submissionResult?.type === "correct" || bountyStatus === BOUNTY_STATUS.Paid) && (
+                    <div className="border-2 border-success bg-success/5 p-6 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 bg-success rounded-full" />
+                        <h3 className="font-display text-2xl text-success uppercase">Solution Found</h3>
+                      </div>
+                      <p className="text-sm text-ink-muted leading-relaxed">
+                        {submissionResult?.type === "correct" 
+                          ? `Congratulations! Your solution was verified on-chain. A reward of ${submissionResult.payout} has been transferred to your wallet.`
+                          : "This bounty has been successfully solved and the reward has been paid out."}
+                      </p>
+                      {(submissionResult?.txHash) && (
+                        <div className="pt-2">
+                          <a 
+                            href={`https://sepolia.etherscan.io/tx/${submissionResult.txHash}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs font-mono text-brand hover:underline"
+                          >
+                            View Receipt →
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {submissionResult?.type === "incorrect" && (
-                    <div className="border border-error bg-error/10 p-4">
-                      <p className="text-sm text-error font-mono uppercase tracking-wider">
-                        Answer incorrect — gas fee deducted. Try again.
+                    <div className="border-2 border-error bg-error/5 p-6 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 bg-error rounded-full" />
+                        <h3 className="font-display text-2xl text-error uppercase">Incorrect Answer</h3>
+                      </div>
+                      <p className="text-sm text-ink-muted leading-relaxed">
+                        The solution provided does not match the on-chain hash. 
+                        <span className="text-error"> Note: Gas fees were consumed for this verification.</span>
                       </p>
+                      <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        onClick={() => setSubmissionResult(null)}
+                        className="mt-2"
+                      >
+                        Try Another Solution
+                      </Button>
                     </div>
                   )}
-                  <p className="text-xs text-ink-faint font-mono leading-relaxed">
-                    Submit the exact answer to claim the reward. Incorrect answers will result in a gas fee deduction with no reward.
-                  </p>
-                  <Input
-                    id="answer"
-                    label="Answer"
-                    value={answer}
-                    onChange={(event) => setAnswer(event.target.value)}
-                    placeholder="Enter your solution"
-                  />
-                  <Button
-                    onClick={() => void submitSolution()}
-                    isLoading={submitting}
-                    disabled={!canSubmit}
-                  >
-                    {submitting ? "SUBMITTING..." : `CLAIM ${formatReward(bounty[2])}`}
-                  </Button>
+
+                  {!submissionResult && bountyStatus !== BOUNTY_STATUS.Paid && (
+                    <>
+                      <p className="text-xs text-ink-faint font-mono leading-relaxed">
+                        Submit the exact answer to claim the reward. Incorrect answers will result in a gas fee deduction with no reward.
+                      </p>
+                      <Input
+                        id="answer"
+                        label="Answer"
+                        value={answer}
+                        onChange={(event) => setAnswer(event.target.value)}
+                        placeholder="Enter your solution"
+                        disabled={submitting || isMining}
+                      />
+                      <Button
+                        onClick={() => void submitSolution()}
+                        isLoading={submitting || isMining}
+                        disabled={!canSubmit || isMining}
+                      >
+                        {isMining ? "MINING CONFIRMATION..." : submitting ? "REQUESTING SIGNATURE..." : `CLAIM ${formatReward(bounty[2])}`}
+                      </Button>
+                    </>
+                  )}
                 </div>
               )}
             </div>

@@ -15,11 +15,16 @@ import { useBountyList } from "@/lib/use-bounty-list";
 import { useBountyMetadata } from "@/lib/use-bounty-metadata";
 import { useWallet } from "@/lib/use-wallet";
 
+import { BOUNTY_STATUS } from "@/lib/bounty-state";
+import { type BountyStatus } from "@/lib/tokens";
+
 function formatReward(reward: bigint) {
   return `${Number(ethers.formatEther(reward)).toFixed(4)} ETH`;
 }
 
-function formatCountdown(expiresAt: bigint, nowSeconds: number) {
+function formatCountdown(expiresAt: bigint, nowSeconds: number, status: number) {
+  if (status === BOUNTY_STATUS.Paid) return "Solved";
+  
   const remaining = Number(expiresAt) - nowSeconds;
   if (remaining <= 0) return "Expired";
 
@@ -30,6 +35,12 @@ function formatCountdown(expiresAt: bigint, nowSeconds: number) {
   if (hours < 48) return `${hours}h`;
 
   return `${Math.ceil(hours / 24)}d`;
+}
+
+function getStatusLabel(status: number, expiresAt: bigint, nowSeconds: number): BountyStatus {
+  if (status === BOUNTY_STATUS.Paid) return "Paid";
+  if (status === BOUNTY_STATUS.Expired || Number(expiresAt) <= nowSeconds) return "Expired";
+  return "Open";
 }
 
 function BountyGridSkeleton() {
@@ -192,19 +203,22 @@ export function BountyBrowser() {
 
               {!loading && !error && bounties.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {bounties.map((bounty) => (
-                    <Link key={bounty.id} href={`/bounty/${bounty.id}`} className="block">
-                      <BountyCard
-                        status="Open"
-                        title={bounty.title}
-                        reward={formatReward(bounty.reward)}
-                        deadline={formatCountdown(bounty.expiresAt, nowSeconds)}
-                        proposer={bounty.poster}
-                        id={bounty.id}
-                        className="h-full border-2 hover:border-brand"
-                      />
-                    </Link>
-                  ))}
+                  {bounties.map((bounty) => {
+                    const statusLabel = getStatusLabel(bounty.status, bounty.expiresAt, nowSeconds);
+                    return (
+                      <Link key={bounty.id} href={`/bounty/${bounty.id}`} className="block">
+                        <BountyCard
+                          status={statusLabel}
+                          title={bounty.title}
+                          reward={formatReward(bounty.reward)}
+                          deadline={formatCountdown(bounty.expiresAt, nowSeconds, bounty.status)}
+                          proposer={bounty.poster}
+                          id={bounty.id}
+                          className="h-full border-2 hover:border-brand"
+                        />
+                      </Link>
+                    );
+                  })}
                 </div>
               )}
             </>
