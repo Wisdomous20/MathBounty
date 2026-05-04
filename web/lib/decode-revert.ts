@@ -48,6 +48,16 @@ const ERROR_MESSAGES: Record<string, RevertMessage> = {
     description: "Refund transfer failed. Please retry.",
     variant: "error",
   },
+  ZeroReward: {
+    title: "Invalid Reward",
+    description: "Bounty reward cannot be zero.",
+    variant: "error",
+  },
+  InvalidExpiry: {
+    title: "Invalid Expiry",
+    description: "Expiry must be in the future.",
+    variant: "error",
+  },
 };
 
 const REVERT_REASON_MESSAGES: Record<string, RevertMessage> = {

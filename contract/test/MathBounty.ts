@@ -11,23 +11,23 @@ async function futureExpiry(secondsFromNow: number) {
 
 describe("MathBounty", function () {
   describe("postBounty", function () {
-    it("reverts with RewardTooLow when msg.value is below 0.0001 ETH", async function () {
+    it("reverts with ZeroReward when msg.value is 0", async function () {
       const [poster] = await ethers.getSigners();
       const contract = await ethers.deployContract("MathBounty");
       const answerHash = ethers.keccak256(ethers.toUtf8Bytes("42"));
       const expiresAt = await futureExpiry(3600);
 
       await expect(
-        contract.connect(poster).postBounty(answerHash, expiresAt, { value: ethers.parseEther("0.00001") })
-      ).to.be.revertedWithCustomError(contract, "RewardTooLow");
+        contract.connect(poster).postBounty(answerHash, expiresAt, { value: 0 })
+      ).to.be.revertedWithCustomError(contract, "ZeroReward");
     });
 
-    it("allows posting with exactly 0.0001 ETH", async function () {
+    it("allows posting with a small amount of ETH", async function () {
       const [poster] = await ethers.getSigners();
       const contract = await ethers.deployContract("MathBounty");
       const answerHash = ethers.keccak256(ethers.toUtf8Bytes("42"));
       const expiresAt = await futureExpiry(3600);
-      const reward = ethers.parseEther("0.0001");
+      const reward = ethers.parseEther("0.00001");
 
       const tx = await contract.connect(poster).postBounty(answerHash, expiresAt, { value: reward });
       const receipt = await tx.wait();
@@ -70,7 +70,7 @@ describe("MathBounty", function () {
     });
   });
 
-  describe("submitAnswer", function () {
+  describe("submitSolution", function () {
     it("solves a bounty and pays the solver", async function () {
       const [poster, solver] = await ethers.getSigners();
       const contract = await ethers.deployContract("MathBounty");
@@ -81,10 +81,10 @@ describe("MathBounty", function () {
       await contract.connect(poster).postBounty(answerHash, expiresAt, { value: reward });
 
       const solverBalanceBefore = await ethers.provider.getBalance(solver.address);
-      const solveTx = await contract.connect(solver).submitAnswer(1n, "42");
+      const solveTx = await contract.connect(solver).submitSolution(1n, "42");
 
       await expect(solveTx)
-        .to.emit(contract, "BountySolved")
+        .to.emit(contract, "SolutionAccepted")
         .withArgs(1n, solver.address, reward);
       const solveReceipt = await solveTx.wait();
       if (!solveReceipt) throw new Error("No solve receipt");
@@ -108,7 +108,7 @@ describe("MathBounty", function () {
       await contract.connect(poster).postBounty(answerHash, expiresAt, { value: reward });
 
       await expect(
-        contract.connect(solver).submitAnswer(1n, "43")
+        contract.connect(solver).submitSolution(1n, "43")
       ).to.be.revertedWithCustomError(contract, "InvalidAnswer");
     });
 
@@ -122,7 +122,7 @@ describe("MathBounty", function () {
       await contract.connect(poster).postBounty(answerHash, expiresAt, { value: reward });
 
       await expect(
-        contract.connect(poster).submitAnswer(1n, "42")
+        contract.connect(poster).submitSolution(1n, "42")
       ).to.be.revertedWithCustomError(contract, "SelfSolveForbidden");
     });
 
@@ -138,7 +138,7 @@ describe("MathBounty", function () {
       await ethers.provider.send("evm_mine");
 
       await expect(
-        contract.connect(solver).submitAnswer(1n, "42")
+        contract.connect(solver).submitSolution(1n, "42")
       ).to.be.revertedWithCustomError(contract, "Expired");
     });
 
@@ -150,10 +150,10 @@ describe("MathBounty", function () {
       const answerHash = ethers.keccak256(ethers.toUtf8Bytes("42"));
 
       await contract.connect(poster).postBounty(answerHash, expiresAt, { value: reward });
-      await contract.connect(solver).submitAnswer(1n, "42");
+      await contract.connect(solver).submitSolution(1n, "42");
 
       await expect(
-        contract.connect(anotherSolver).submitAnswer(1n, "42")
+        contract.connect(anotherSolver).submitSolution(1n, "42")
       ).to.be.revertedWithCustomError(contract, "NotOpen");
     });
   });
@@ -260,7 +260,7 @@ describe("MathBounty", function () {
       const answerHash = ethers.keccak256(ethers.toUtf8Bytes("42"));
 
       await contract.connect(poster).postBounty(answerHash, expiresAt, { value: reward });
-      await contract.connect(solver).submitAnswer(1n, "42");
+      await contract.connect(solver).submitSolution(1n, "42");
 
       await ethers.provider.send("evm_increaseTime", [3601]);
       await ethers.provider.send("evm_mine");

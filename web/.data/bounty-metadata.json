@@ -1,4 +1,10 @@
 {
+  "1": {
+    "title": "Jed's Test Bounty",
+    "description": "1+1",
+    "difficulty": "Easy",
+    "tags": []
+  },
   "4": {
     "title": "Hatdog",
     "description": "wayne abnoy",
@@ -11,6 +17,12 @@
   "14": {
     "title": "1+1",
     "description": "what is the answer",
+    "difficulty": "Medium",
+    "tags": []
+  },
+  "16": {
+    "title": "jed test",
+    "description": "1+2",
     "difficulty": "Medium",
     "tags": []
   },

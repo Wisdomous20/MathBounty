@@ -11,12 +11,13 @@ import { BOUNTY_STATUS } from "@/lib/bounty-state";
 import { useBountyMetadata } from "@/lib/use-bounty-metadata";
 import { getReadProvider } from "@/lib/read-provider";
 
-export type OpenBountyListItem = {
+export type BountyListItem = {
 	id: string;
 	poster: string;
 	reward: bigint;
 	expiresAt: bigint;
 	title: string;
+	status: number;
 };
 
 type BountyTuple = readonly [
@@ -58,13 +59,13 @@ function getFallbackTitle() {
 export function useBountyList(accountAddress?: string | null) {
 	const { getMetadata, getMetadataBatch, syncMetadataToServer } =
 		useBountyMetadata();
-	const [bounties, setBounties] = useState<OpenBountyListItem[]>([]);
+	const [bounties, setBounties] = useState<BountyListItem[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
 	const hasLoadedRef = useRef(false);
 	const inFlightFetchRef = useRef<Promise<void> | null>(null);
-	const lastSuccessfulBountiesRef = useRef<OpenBountyListItem[]>([]);
+	const lastSuccessfulBountiesRef = useRef<BountyListItem[]>([]);
 	const syncedInSessionRef = useRef<Set<string>>(new Set());
 
 	const fetchBounties = useCallback(async () => {
@@ -90,7 +91,7 @@ export function useBountyList(accountAddress?: string | null) {
 				const ids = getBountyIds(count);
 				const now = Math.floor(Date.now() / 1000);
 				const metadataById = await getMetadataBatch(ids);
-				const loaded: OpenBountyListItem[] = [];
+				const loaded: BountyListItem[] = [];
 
 				for (let start = 0; start < ids.length; start += BOUNTY_BATCH_SIZE) {
 					const chunkIds = ids.slice(start, start + BOUNTY_BATCH_SIZE);
@@ -101,7 +102,8 @@ export function useBountyList(accountAddress?: string | null) {
 						const status = Number(data[4]);
 						const expiresAt = data[3];
 
-						if (status !== BOUNTY_STATUS.Open || Number(expiresAt) <= now) {
+						// Filter out invalid records
+						if (data[0] === ethers.ZeroAddress) {
 							return;
 						}
 
@@ -113,6 +115,7 @@ export function useBountyList(accountAddress?: string | null) {
 							reward: data[2],
 							expiresAt,
 							title,
+							status,
 						});
 
 						if (!title) {

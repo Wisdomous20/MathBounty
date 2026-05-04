@@ -20,6 +20,8 @@ export const colors = {
   successDim: "#00a344",
   error: "#ff1744",
   errorDim: "#d50000",
+  info: "#2979ff",
+  infoDim: "#2962ff",
 
   // Surfaces (dark mode default)
   surface: "#0a0a0a",
@@ -60,27 +62,27 @@ export const colorClasses = {
 export const bountyStatus = {
   Open: {
     label: "Open",
-    textColor: "text-success",
-    bgColor: "bg-success/10",
-    borderColor: "border-success",
-    hex: colors.success,
-    description: "Bounty is live and accepting claims",
-  },
-  Claimed: {
-    label: "Claimed",
     textColor: "text-brand",
     bgColor: "bg-brand/10",
     borderColor: "border-brand",
     hex: colors.brand,
+    description: "Bounty is live and accepting claims",
+  },
+  Claimed: {
+    label: "Claimed",
+    textColor: "text-info",
+    bgColor: "bg-info/10",
+    borderColor: "border-info",
+    hex: colors.info,
     description: "A solver has claimed this bounty and is working on it",
   },
   Paid: {
-    label: "Paid",
+    label: "Solved",
     textColor: "text-success",
     bgColor: "bg-success/10",
     borderColor: "border-success",
     hex: colors.success,
-    description: "Bounty has been successfully paid out",
+    description: "Bounty has been successfully solved and paid out",
   },
   Expired: {
     label: "Expired",

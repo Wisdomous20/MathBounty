@@ -10,6 +10,7 @@ export type WalletState =
 	| "wrong-network";
 
 const SEPOLIA_CHAIN_ID = "0xaa36a7"; // 11155111
+const DISCONNECTED_KEY = "wallet:userDisconnected";
 
 export function useWallet() {
 	const [state, setState] = useState<WalletState>("disconnected");
@@ -46,7 +47,7 @@ export function useWallet() {
 			setSigner(userSigner);
 			setState("connected");
 			try {
-				localStorage.removeItem("mathbounty-wallet-disconnected");
+				localStorage.removeItem(DISCONNECTED_KEY);
 			} catch {
 				// Ignore localStorage errors (e.g., private mode).
 			}
@@ -64,7 +65,7 @@ export function useWallet() {
 		setProvider(null);
 		setSigner(null);
 		try {
-			localStorage.setItem("mathbounty-wallet-disconnected", "true");
+			localStorage.setItem(DISCONNECTED_KEY, "true");
 		} catch {
 			// Ignore localStorage errors (e.g., private mode).
 		}
@@ -127,6 +128,16 @@ export function useWallet() {
 				setAddress(null);
 				setSigner(null);
 			} else {
+				// If the user explicitly disconnected, ignore account changes
+				// until they explicitly click Connect again.
+				try {
+					if (localStorage.getItem(DISCONNECTED_KEY) === "true") {
+						return;
+					}
+				} catch {
+					// Fallback for private mode: if we can't check, we might auto-connect
+				}
+
 				setAddress(accs[0]);
 				connect();
 			}
@@ -151,7 +162,7 @@ export function useWallet() {
 		if (!win.ethereum) return;
 
 		try {
-			if (localStorage.getItem("mathbounty-wallet-disconnected") === "true") {
+			if (localStorage.getItem(DISCONNECTED_KEY) === "true") {
 				return;
 			}
 		} catch {
