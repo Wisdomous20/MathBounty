@@ -26,6 +26,18 @@
     "difficulty": "Medium",
     "tags": []
   },
+  "18": {
+    "title": "1+1",
+    "description": "secret",
+    "difficulty": "Medium",
+    "tags": []
+  },
+  "19": {
+    "title": "3+6",
+    "description": "secret",
+    "difficulty": "Medium",
+    "tags": []
+  },
   "22": {
     "title": "303",
     "description": "404",
@@ -40,5 +52,11 @@
       "test"
     ],
     "solverStake": "0.0001"
+  },
+  "27": {
+    "title": "1+1",
+    "description": "magelan",
+    "difficulty": "Medium",
+    "tags": []
   }
 }

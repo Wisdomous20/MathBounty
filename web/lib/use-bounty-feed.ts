@@ -40,7 +40,7 @@ function generateItem(): BountyFeedItem {
   const id = `#${Math.floor(1000 + Math.random() * 9000)}`;
   const problem = PROBLEMS[Math.floor(Math.random() * PROBLEMS.length)];
   const address = ADDRESSES[Math.floor(Math.random() * ADDRESSES.length)];
-  const reward = (0.5 + Math.random() * 9.5).toFixed(3);
+  const reward = (0.5 + Math.random() * 9.5).toFixed(4);
   const status = STATUSES[Math.floor(Math.random() * STATUSES.length)];
   const days = Math.floor(7 + Math.random() * 83);
   return {

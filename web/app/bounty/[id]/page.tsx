@@ -18,6 +18,12 @@ import {
   MATH_BOUNTY_ADDRESS,
   MATH_BOUNTY_DEPLOY_BLOCK,
 } from "@/lib/contracts";
+import {
+  logContractError,
+  logContractEvent,
+  logMathBountyDiagnostics,
+  resolveMathBountySubmitMethod,
+} from "@/lib/contract-debug";
 import { decodeContractError } from "@/lib/decode-revert";
 import { getReadProvider } from "@/lib/read-provider";
 import { type BountyMetadata, useBountyMetadata } from "@/lib/use-bounty-metadata";
@@ -139,6 +145,9 @@ export default function BountyDetailPage() {
     setLoading(true);
     try {
       const provider = getReadProvider();
+      await logMathBountyDiagnostics("loadBounty: provider diagnostics", provider, {
+        bountyId,
+      });
       await assertMathBountyContract(provider);
       const contract = new ethers.Contract(
         MATH_BOUNTY_ADDRESS,
@@ -146,6 +155,15 @@ export default function BountyDetailPage() {
         provider
       );
       const data = (await contract.getBounty(bountyId)) as BountyTuple;
+      logContractEvent("loadBounty: on-chain bounty data", {
+        bountyId,
+        contractAddress: MATH_BOUNTY_ADDRESS,
+        poster: data[0],
+        answerHash: data[1],
+        rewardWei: data[2].toString(),
+        expiresAt: data[3].toString(),
+        status: data[4].toString(),
+      });
       if (data[0] === ethers.ZeroAddress) {
         setBounty(null);
         setOutcome(null);
@@ -165,6 +183,11 @@ export default function BountyDetailPage() {
         contract.filters.SolutionAccepted(chainBountyId),
         MATH_BOUNTY_DEPLOY_BLOCK || 0
       );
+      logContractEvent("loadBounty: SolutionAccepted events", {
+        bountyId,
+        fromBlock: MATH_BOUNTY_DEPLOY_BLOCK || 0,
+        eventCount: solvedEvents.length,
+      });
       const latestSolved = solvedEvents.at(-1);
       if (latestSolved && "args" in latestSolved) {
         setOutcome({
@@ -175,6 +198,10 @@ export default function BountyDetailPage() {
         setOutcome(null);
       }
     } catch (err: unknown) {
+      logContractError("loadBounty: failed", err, {
+        bountyId,
+        contractAddress: MATH_BOUNTY_ADDRESS,
+      });
       setError(err instanceof Error ? err.message : "Failed to load bounty.");
       setMetadata(null);
     } finally {
@@ -233,6 +260,7 @@ export default function BountyDetailPage() {
     if (!signer || !bountyId) return;
     const cleaned = answer.trim();
     if (!cleaned) return;
+    const submittedAnswerHash = ethers.keccak256(ethers.toUtf8Bytes(cleaned));
 
     setSubmitting(true);
     setSubmissionResult(null);
@@ -243,10 +271,31 @@ export default function BountyDetailPage() {
     });
 
     try {
+      await logMathBountyDiagnostics("submitSolution: provider diagnostics", signer.provider, {
+        bountyId,
+        connectedAddress: address,
+        answerHash: submittedAnswerHash,
+        answerLength: cleaned.length,
+      });
       await assertMathBountyContract(signer.provider);
       const contract = new ethers.Contract(MATH_BOUNTY_ADDRESS, MATH_BOUNTY_ABI, signer);
-      const tx = await contract.submitSolution(BigInt(bountyId), cleaned);
-      
+      const submitMethod = await resolveMathBountySubmitMethod(signer.provider);
+      logContractEvent("submitSolution: selected contract method", {
+        bountyId,
+        contractAddress: MATH_BOUNTY_ADDRESS,
+        submitMethod,
+      });
+      const submit = contract.getFunction(submitMethod);
+      const tx = (await submit(
+        BigInt(bountyId),
+        cleaned
+      )) as ethers.ContractTransactionResponse;
+      logContractEvent("submitSolution: transaction sent", {
+        bountyId,
+        submitMethod,
+        txHash: tx.hash,
+      });
+
       setIsMining(true);
       showToast({
         variant: "info",
@@ -255,6 +304,13 @@ export default function BountyDetailPage() {
       });
 
       const receipt = await tx.wait();
+      logContractEvent("submitSolution: receipt received", {
+        bountyId,
+        submitMethod,
+        txHash: receipt?.hash ?? tx.hash,
+        status: receipt?.status,
+        blockNumber: receipt?.blockNumber,
+      });
       setIsMining(false);
 
       const payout = bounty ? formatReward(bounty[2]) : "0 ETH";
@@ -274,6 +330,13 @@ export default function BountyDetailPage() {
       await loadBounty();
     } catch (err: unknown) {
       setIsMining(false);
+      logContractError("submitSolution: failed", err, {
+        bountyId,
+        contractAddress: MATH_BOUNTY_ADDRESS,
+        connectedAddress: address,
+        answerHash: submittedAnswerHash,
+        answerLength: cleaned.length,
+      });
       const decoded = decodeContractError(err);
       
       if (decoded.title === "Wrong Answer") {
