@@ -42,6 +42,12 @@ type LandingBounty = {
 	size: "large" | "normal";
 };
 
+const EMPTY_ETH_VALUE = "0.000";
+
+function formatLandingEth(value: bigint) {
+	return Number(ethers.formatEther(value)).toFixed(3);
+}
+
 export default function Home() {
 	const router = useRouter();
 	const { state, address, connect, disconnect, switchNetwork } = useWallet();
@@ -80,10 +86,10 @@ export default function Home() {
 				if (count === BigInt(0)) {
 					if (!cancelled) {
 						setStats({
-							totalEscrowed: "0.00",
+							totalEscrowed: EMPTY_ETH_VALUE,
 							activeCount: 0,
 							solvedCount: 0,
-							avgReward: "0.00",
+							avgReward: EMPTY_ETH_VALUE,
 						});
 						setTopBounties([]);
 					}
@@ -154,10 +160,10 @@ export default function Home() {
 
 				if (!cancelled) {
 					setStats({
-						totalEscrowed: Number(ethers.formatEther(totalEscrowed)).toFixed(2),
+						totalEscrowed: formatLandingEth(totalEscrowed),
 						activeCount,
 						solvedCount,
-						avgReward: Number(ethers.formatEther(avgReward)).toFixed(2),
+						avgReward: formatLandingEth(avgReward),
 					});
 				}
 
@@ -192,7 +198,7 @@ export default function Home() {
 							return {
 								id: b.id,
 								title: meta?.title || "",
-								reward: Number(ethers.formatEther(b.tuple[2])).toFixed(2),
+								reward: formatLandingEth(b.tuple[2]),
 								status: "Open",
 								deadline,
 								size: i === 0 || i === 3 ? "large" : "normal",
@@ -325,7 +331,7 @@ export default function Home() {
 										label: "Total Escrowed",
 										value: statsLoading
 											? null
-											: (stats?.totalEscrowed ?? "0.00"),
+											: (stats?.totalEscrowed ?? EMPTY_ETH_VALUE),
 										unit: "ETH",
 										row: "R01",
 									},
@@ -343,7 +349,7 @@ export default function Home() {
 									},
 									{
 										label: "Avg. Reward",
-										value: statsLoading ? null : (stats?.avgReward ?? "0.00"),
+										value: statsLoading ? null : (stats?.avgReward ?? EMPTY_ETH_VALUE),
 										unit: "ETH",
 										row: "R04",
 									},

@@ -13,7 +13,7 @@ function formatLine(item: {
   title: string;
 }): string {
   const addr = item.address.slice(0, 6) + "…" + item.address.slice(-4);
-  const reward = item.reward.padStart(5, "0");
+  const reward = item.reward.padStart(6, "0");
   const status = item.status.padEnd(7, " ");
   const deadline = item.deadline.padStart(4, " ");
   const title = item.title.length > 26 ? item.title.slice(0, 26) + "…" : item.title;
