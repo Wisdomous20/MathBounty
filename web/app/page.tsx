@@ -42,10 +42,10 @@ type LandingBounty = {
 	size: "large" | "normal";
 };
 
-const EMPTY_ETH_VALUE = "0.000";
+const EMPTY_ETH_VALUE = "0.0000";
 
 function formatLandingEth(value: bigint) {
-	return Number(ethers.formatEther(value)).toFixed(3);
+	return Number(ethers.formatEther(value)).toFixed(4);
 }
 
 export default function Home() {
