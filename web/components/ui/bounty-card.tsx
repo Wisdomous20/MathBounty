@@ -43,7 +43,7 @@ export function BountyCard({
             </span>
           )}
         </h3>
-        <Badge variant={status === "Expired" ? "error" : status === "Open" ? "success" : status === "Claimed" ? "warning" : "success"}>
+        <Badge variant={status === "Expired" ? "error" : status === "Open" ? "warning" : status === "Paid" ? "success" : status === "Claimed" ? "info" : "default"}>
           {statusConfig.label}
         </Badge>
       </div>

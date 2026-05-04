@@ -70,14 +70,12 @@ export function useUserBounties(accountAddress?: string | null) {
           provider
         );
 
-        // Filter BountyPosted by poster
-        const filter = contract.filters.BountyPosted(null, accountAddress);
-        const events = (await contract.queryFilter(
-          filter,
-          MATH_BOUNTY_DEPLOY_BLOCK
-        )) as unknown as BountyPostedEvent[];
+        // Fetch IDs directly from the contract state
+        const rawIds = (await contract.getMyPostedBounties({
+          from: accountAddress,
+        })) as bigint[];
 
-        const ids = events.map((event) => event.args.bountyId.toString());
+        const ids = rawIds.map((id) => id.toString());
         if (ids.length === 0) {
           setBounties([]);
           setError(null);

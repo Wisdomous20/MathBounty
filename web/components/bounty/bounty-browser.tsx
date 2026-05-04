@@ -15,6 +15,7 @@ import { useBountyList } from "@/lib/use-bounty-list";
 import { useBountyMetadata } from "@/lib/use-bounty-metadata";
 import { useWallet } from "@/lib/use-wallet";
 
+import { cn } from "@/lib/cn";
 import { BOUNTY_STATUS } from "@/lib/bounty-state";
 import { type BountyStatus } from "@/lib/tokens";
 
@@ -58,6 +59,7 @@ export function BountyBrowser() {
   const { syncPendingMetadata } = useBountyMetadata();
   const { bounties, loading, error, lastUpdatedAt, retry } = useBountyList(address);
   const [nowSeconds, setNowSeconds] = useState(() => Math.floor(Date.now() / 1000));
+  const [filter, setFilter] = useState<"All" | "Open" | "Solved" | "Expired">("Open");
   const [showErrorToast, setShowErrorToast] = useState(false);
 
   useEffect(() => {
@@ -137,7 +139,7 @@ export function BountyBrowser() {
 
       <main id="open-bounties" className="flex-1">
         <section className="max-w-7xl mx-auto px-6 py-12 md:py-16">
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-8 lg:gap-12 items-end mb-10 md:mb-14">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-10 md:mb-14">
             <div>
               <div className="font-mono text-xs text-brand uppercase tracking-[0.3em] mb-4">
                 Live Sepolia Market
@@ -146,28 +148,48 @@ export function BountyBrowser() {
                 className="font-display font-bold text-ink leading-[0.85] tracking-tight"
                 style={{ fontSize: "clamp(3rem, 10vw, 6rem)" }}
               >
-                Open
+                {filter === "All" ? "Market" : filter}
                 <br />
                 Bounties
               </h1>
             </div>
-            {state === "connected" && (
-              <div className="border-2 border-border bg-surface-raised p-5">
-                <div className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em] mb-2">
-                  Chain Status
+
+            <div className="flex flex-col gap-6">
+              {state === "connected" && (
+                <div className="border-2 border-border bg-surface-raised p-5 min-w-[280px]">
+                  <div className="font-mono text-[10px] text-ink-faint uppercase tracking-[0.2em] mb-2">
+                    Chain Status
+                  </div>
+                  <div className="font-mono text-sm text-ink-muted">
+                    {lastUpdatedAt
+                      ? `Updated ${new Date(lastUpdatedAt).toLocaleTimeString()}`
+                      : "Waiting for first sync"}
+                  </div>
+                  <div className="mt-4">
+                    <Button variant="secondary" size="sm" onClick={() => void retry()}>
+                      Retry
+                    </Button>
+                  </div>
                 </div>
-                <div className="font-mono text-sm text-ink-muted">
-                  {lastUpdatedAt
-                    ? `Updated ${new Date(lastUpdatedAt).toLocaleTimeString()}`
-                    : "Waiting for first sync"}
-                </div>
-                <div className="mt-4">
-                  <Button variant="secondary" size="sm" onClick={() => void retry()}>
-                    Retry
-                  </Button>
-                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                {(["All", "Open", "Solved", "Expired"] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={cn(
+                      "px-4 py-2 text-xs font-bold tracking-widest uppercase border transition-all duration-fast",
+                      filter === f
+                        ? "bg-brand text-surface border-brand"
+                        : "bg-surface-raised text-ink-muted border-border hover:border-ink-faint"
+                    )}
+                  >
+                    {f}
+                  </button>
+                ))}
               </div>
-            )}
+            </div>
           </div>
 
           {state !== "connected" ? (
@@ -193,33 +215,46 @@ export function BountyBrowser() {
                 </div>
               )}
 
-              {!loading && !error && bounties.length === 0 && (
-                <EmptyState
-                  title="No open bounties yet - be the first to post one"
-                  actionHref="/new"
-                  actionLabel="Post a bounty"
-                />
-              )}
+              {!loading && !error && (
+                (() => {
+                  const filteredBounties = bounties.filter(b => {
+                    if (filter === "All") return true;
+                    const label = getStatusLabel(b.status, b.expiresAt, nowSeconds);
+                    if (filter === "Solved") return label === "Paid";
+                    return label === filter;
+                  });
 
-              {!loading && !error && bounties.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {bounties.map((bounty) => {
-                    const statusLabel = getStatusLabel(bounty.status, bounty.expiresAt, nowSeconds);
+                  if (filteredBounties.length === 0) {
                     return (
-                      <Link key={bounty.id} href={`/bounty/${bounty.id}`} className="block">
-                        <BountyCard
-                          status={statusLabel}
-                          title={bounty.title}
-                          reward={formatReward(bounty.reward)}
-                          deadline={formatCountdown(bounty.expiresAt, nowSeconds, bounty.status)}
-                          proposer={bounty.poster}
-                          id={bounty.id}
-                          className="h-full border-2 hover:border-brand"
-                        />
-                      </Link>
+                      <EmptyState
+                        title={`No ${filter === "All" ? "" : filter.toLowerCase() + " "}bounties found`}
+                        actionHref="/new"
+                        actionLabel="Post a bounty"
+                      />
                     );
-                  })}
-                </div>
+                  }
+
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                      {filteredBounties.map((bounty) => {
+                        const statusLabel = getStatusLabel(bounty.status, bounty.expiresAt, nowSeconds);
+                        return (
+                          <Link key={bounty.id} href={`/bounty/${bounty.id}`} className="block">
+                            <BountyCard
+                              status={statusLabel}
+                              title={bounty.title}
+                              reward={formatReward(bounty.reward)}
+                              deadline={formatCountdown(bounty.expiresAt, nowSeconds, bounty.status)}
+                              proposer={bounty.poster}
+                              id={bounty.id}
+                              className="h-full border-2 hover:border-brand"
+                            />
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  );
+                })()
               )}
             </>
           )}

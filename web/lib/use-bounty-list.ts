@@ -102,8 +102,7 @@ export function useBountyList(accountAddress?: string | null) {
 						const status = Number(data[4]);
 						const expiresAt = data[3];
 
-						// Keep all bounties for the browser, status will be shown via badge
-						// Only filter out invalid records if any
+						// Filter out invalid records
 						if (data[0] === ethers.ZeroAddress) {
 							return;
 						}

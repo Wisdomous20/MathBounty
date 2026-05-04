@@ -54,9 +54,9 @@ function BountyListItem({
 
 	const statusConfig = {
 		[BOUNTY_STATUS.Open]: isExpired
-			? { label: "Expired", variant: "default" as const }
+			? { label: "Expired", variant: "error" as const }
 			: { label: "Open", variant: "success" as const },
-		[BOUNTY_STATUS.Paid]: { label: "Solved", variant: "success" as const },
+		[BOUNTY_STATUS.Paid]: { label: "Solved", variant: "warning" as const },
 		[BOUNTY_STATUS.Expired]: {
 			label: "Reclaimed",
 			variant: "default" as const,

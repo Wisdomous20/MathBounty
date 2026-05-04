@@ -221,12 +221,12 @@ export default function BountyDetailPage() {
   const statusUi = (() => {
     if (!bounty) return { label: "Unknown", variant: "default" as const };
     if (statusNumber === BOUNTY_STATUS.Paid) {
-      return { label: "Paid", variant: "warning" as const };
+      return { label: "Solved", variant: "success" as const };
     }
     if (statusNumber === BOUNTY_STATUS.Expired || isExpiredByClock) {
-      return { label: "Expired", variant: "default" as const };
+      return { label: "Expired", variant: "error" as const };
     }
-    return { label: "Open", variant: "success" as const };
+    return { label: "Open", variant: "warning" as const };
   })();
 
   const submitSolution = async () => {
@@ -392,9 +392,27 @@ export default function BountyDetailPage() {
                 <div className="space-y-4">
                   <div className="font-mono text-xs text-brand uppercase tracking-[0.2em]">Outcome</div>
                   <h2 className="font-display text-4xl uppercase">Bounty Solved</h2>
-                  <p className="text-ink-muted">
-                    Solver {truncateAddress(outcome?.solver ?? "")} received {formatReward(bounty[2])}.
-                  </p>
+                  {outcome?.solver.toLowerCase() === address?.toLowerCase() ? (
+                    <div className="border-2 border-success bg-success/5 p-6 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 bg-success rounded-full" />
+                        <h3 className="font-display text-2xl text-success uppercase">You Solved This!</h3>
+                      </div>
+                      <p className="text-sm text-ink-muted leading-relaxed">
+                        Congratulations! Your solution was verified on-chain. A reward of {formatReward(bounty[2])} was transferred to your wallet.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="border-2 border-border bg-surface-sunken p-6 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 bg-ink-faint rounded-full" />
+                        <h3 className="font-display text-2xl text-ink uppercase">Solved by Another User</h3>
+                      </div>
+                      <p className="text-sm text-ink-muted leading-relaxed">
+                        This bounty has been successfully solved by <span className="font-mono text-brand">{outcome ? truncateAddress(outcome.solver) : "another user"}</span>. The reward of {formatReward(bounty[2])} has been paid out.
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : isOpen && isExpiredByClock ? (
                 <div className="space-y-4">
@@ -429,7 +447,7 @@ export default function BountyDetailPage() {
                 <div className="space-y-4 relative overflow-hidden">
                   <div className="font-mono text-xs text-brand uppercase tracking-[0.2em]">Submission</div>
                   <h2 className="font-display text-4xl uppercase">
-                    {bountyStatus === BOUNTY_STATUS.Paid ? "Bounty Solved" : "Submit Solution"}
+                    Submit Solution
                   </h2>
                   
                   {isMining && (
@@ -443,16 +461,14 @@ export default function BountyDetailPage() {
                     </div>
                   )}
 
-                  {(submissionResult?.type === "correct" || bountyStatus === BOUNTY_STATUS.Paid) && (
+                  {submissionResult?.type === "correct" && (
                     <div className="border-2 border-success bg-success/5 p-6 space-y-3">
                       <div className="flex items-center gap-3">
                         <div className="w-2 h-2 bg-success rounded-full" />
                         <h3 className="font-display text-2xl text-success uppercase">Solution Found</h3>
                       </div>
                       <p className="text-sm text-ink-muted leading-relaxed">
-                        {submissionResult?.type === "correct" 
-                          ? `Congratulations! Your solution was verified on-chain. A reward of ${submissionResult.payout} has been transferred to your wallet.`
-                          : "This bounty has been successfully solved and the reward has been paid out."}
+                        Congratulations! Your solution was verified on-chain. A reward of {submissionResult.payout} has been transferred to your wallet.
                       </p>
                       {(submissionResult?.txHash) && (
                         <div className="pt-2">
@@ -490,7 +506,7 @@ export default function BountyDetailPage() {
                     </div>
                   )}
 
-                  {!submissionResult && bountyStatus !== BOUNTY_STATUS.Paid && (
+                  {!submissionResult && statusNumber !== BOUNTY_STATUS.Paid && (
                     <>
                       <p className="text-xs text-ink-faint font-mono leading-relaxed">
                         Submit the exact answer to claim the reward. Incorrect answers will result in a gas fee deduction with no reward.

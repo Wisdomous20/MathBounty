@@ -1,6 +1,6 @@
 import { cn } from '@/lib/cn'
 
-export type BadgeVariant = 'default' | 'success' | 'error' | 'warning' | 'brand'
+export type BadgeVariant = 'default' | 'success' | 'error' | 'warning' | 'brand' | 'info'
 
 interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   variant?: BadgeVariant
@@ -27,7 +27,8 @@ export function Badge ({
     success: 'bg-success/10 text-success border border-success/30',
     error: 'bg-error/10 text-error border border-error/30',
     warning: 'bg-brand/10 text-brand border border-brand/30',
-    brand: 'bg-brand text-surface border border-brand'
+    brand: 'bg-brand text-surface border border-brand',
+    info: 'bg-info/10 text-info border border-info/30'
   }
 
   return (
