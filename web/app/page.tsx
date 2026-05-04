@@ -271,12 +271,6 @@ export default function Home() {
 						>
 							Mechanism
 						</Link>
-						<Link
-							href="#mechanism"
-							className="hover:text-brand active:opacity-70 transition-all duration-fast"
-						>
-							Docs
-						</Link>
 					</nav>
 					<div className="flex items-center gap-3">
 						<ThemeToggle />
@@ -733,12 +727,6 @@ export default function Home() {
 								className="hover:text-brand active:opacity-70 transition-all"
 							>
 								GitHub
-							</Link>
-							<Link
-								href="#mechanism"
-								className="hover:text-brand active:opacity-70 transition-all"
-							>
-								Docs
 							</Link>
 							<span
 								className="text-ink-faint opacity-50 cursor-not-allowed line-through"
