@@ -22,7 +22,7 @@ export interface UserSolveItem {
 
 const REFRESH_INTERVAL_MS = 60_000;
 
-type BountySolvedEvent = {
+type SolutionAcceptedEvent = {
   args: {
     bountyId: bigint;
     reward: bigint;
@@ -66,11 +66,11 @@ export function useUserSolves(accountAddress?: string | null) {
           provider
         );
 
-        const filter = contract.filters.BountySolved(null, accountAddress);
+        const filter = contract.filters.SolutionAccepted(null, accountAddress);
         const events = (await contract.queryFilter(
           filter,
           MATH_BOUNTY_DEPLOY_BLOCK
-        )) as unknown as BountySolvedEvent[];
+        )) as unknown as SolutionAcceptedEvent[];
 
         if (events.length === 0) {
           setSolves([]);

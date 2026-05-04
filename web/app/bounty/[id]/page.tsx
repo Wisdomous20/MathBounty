@@ -160,7 +160,7 @@ export default function BountyDetailPage() {
 
       const chainBountyId = BigInt(bountyId);
       const solvedEvents = await contract.queryFilter(
-        contract.filters.BountySolved(chainBountyId),
+        contract.filters.SolutionAccepted(chainBountyId),
         MATH_BOUNTY_DEPLOY_BLOCK || 0
       );
       const latestSolved = solvedEvents.at(-1);
@@ -227,7 +227,7 @@ export default function BountyDetailPage() {
     return { label: "Open", variant: "success" as const };
   })();
 
-  const submitAnswer = async () => {
+  const submitSolution = async () => {
     if (!signer || !bountyId) return;
     const cleaned = answer.trim();
     if (!cleaned) return;
@@ -242,7 +242,7 @@ export default function BountyDetailPage() {
     try {
       await assertMathBountyContract(signer.provider);
       const contract = new ethers.Contract(MATH_BOUNTY_ADDRESS, MATH_BOUNTY_ABI, signer);
-      const tx = await contract.submitAnswer(BigInt(bountyId), cleaned);
+      const tx = await contract.submitSolution(BigInt(bountyId), cleaned);
       const receipt = await tx.wait();
       const payout = bounty ? formatReward(bounty[2]) : "0 ETH";
       setSubmissionResult({ type: "correct", payout });
@@ -427,7 +427,7 @@ export default function BountyDetailPage() {
                     placeholder="Enter your solution"
                   />
                   <Button
-                    onClick={() => void submitAnswer()}
+                    onClick={() => void submitSolution()}
                     isLoading={submitting}
                     disabled={!canSubmit}
                   >

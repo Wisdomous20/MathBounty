@@ -3,6 +3,16 @@ pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+/**
+ * @title MathBounty
+ * @dev A permissionless bounty contract for math problems.
+ * 
+ * State Machine:
+ * Open -> Paid (via submitSolution)
+ * Open -> Expired (via reclaimExpired)
+ * 
+ * Terminal States: Paid, Expired.
+ */
 contract MathBounty is ReentrancyGuard {
     enum BountyStatus {
         Open,
@@ -18,7 +28,7 @@ contract MathBounty is ReentrancyGuard {
         BountyStatus status;
     }
 
-    error RewardTooLow();
+    error ZeroReward();
     error InvalidExpiry();
     error NotPoster();
     error NotOpen();
@@ -47,14 +57,34 @@ contract MathBounty is ReentrancyGuard {
         uint256 reward
     );
 
-    event BountySolved(
+    event SolutionAccepted(
         uint256 indexed bountyId,
         address indexed solver,
         uint256 reward
     );
 
+    modifier onlyPoster(uint256 bountyId) {
+        if (msg.sender != bounties[bountyId].poster) revert NotPoster();
+        _;
+    }
+
     modifier onlyOpen(uint256 bountyId) {
-        require(bounties[bountyId].status == BountyStatus.Open, "Bounty is not open");
+        if (bounties[bountyId].status != BountyStatus.Open) revert NotOpen();
+        _;
+    }
+
+    modifier notSelf(uint256 bountyId) {
+        if (msg.sender == bounties[bountyId].poster) revert SelfSolveForbidden();
+        _;
+    }
+
+    modifier notExpired(uint256 bountyId) {
+        if (block.timestamp > bounties[bountyId].expiresAt) revert Expired();
+        _;
+    }
+
+    modifier isExpired(uint256 bountyId) {
+        if (block.timestamp <= bounties[bountyId].expiresAt) revert NotExpired();
         _;
     }
 
@@ -63,7 +93,7 @@ contract MathBounty is ReentrancyGuard {
         payable
         returns (uint256 bountyId)
     {
-        if (msg.value < 0.0001 ether) revert RewardTooLow();
+        if (msg.value == 0) revert ZeroReward();
         if (expiresAt <= block.timestamp) revert InvalidExpiry();
 
         bountyCount += 1;
@@ -82,45 +112,60 @@ contract MathBounty is ReentrancyGuard {
         emit BountyPosted(bountyId, msg.sender, answerHash, msg.value, expiresAt);
     }
 
-    function submitAnswer(uint256 bountyId, string calldata answer)
+    function submitSolution(uint256 bountyId, string calldata answer)
         external
+        onlyOpen(bountyId)
+        notSelf(bountyId)
+        notExpired(bountyId)
         nonReentrant
     {
         Bounty storage bounty = bounties[bountyId];
-        if (bounty.status != BountyStatus.Open) revert NotOpen();
-        if (block.timestamp > bounty.expiresAt) revert Expired();
-        if (msg.sender == bounty.poster) revert SelfSolveForbidden();
         if (keccak256(bytes(answer)) != bounty.answerHash) revert InvalidAnswer();
 
         bounty.status = BountyStatus.Paid;
 
         uint256 payout = bounty.reward;
         bounty.reward = 0;
+        
         (bool success, ) = payable(msg.sender).call{value: payout}("");
         if (!success) revert PayoutFailed();
 
-        emit BountySolved(bountyId, msg.sender, payout);
+        emit SolutionAccepted(bountyId, msg.sender, payout);
     }
 
-    function reclaimExpired(uint256 bountyId) external nonReentrant {
-        _reclaimExpired(bountyId);
-    }
-
-    function claimRefund(uint256 bountyId) external nonReentrant {
-        _reclaimExpired(bountyId);
-    }
-
-    function _reclaimExpired(uint256 bountyId) internal {
+    function reclaimExpired(uint256 bountyId) 
+        external 
+        onlyPoster(bountyId)
+        onlyOpen(bountyId)
+        isExpired(bountyId)
+        nonReentrant 
+    {
         Bounty storage bounty = bounties[bountyId];
-        if (msg.sender != bounty.poster) revert NotPoster();
-        if (bounty.status != BountyStatus.Open) revert NotOpen();
-        if (block.timestamp <= bounty.expiresAt) revert NotExpired();
 
         bounty.status = BountyStatus.Expired;
         uint256 refundAmount = bounty.reward;
         bounty.reward = 0;
 
-        (bool success, ) = bounty.poster.call{value: refundAmount}("");
+        (bool success, ) = payable(bounty.poster).call{value: refundAmount}("");
+        if (!success) revert RefundFailed();
+
+        emit BountyReclaimed(bountyId, bounty.poster, refundAmount);
+    }
+
+    function claimRefund(uint256 bountyId) 
+        external 
+        onlyPoster(bountyId)
+        onlyOpen(bountyId)
+        isExpired(bountyId)
+        nonReentrant 
+    {
+        Bounty storage bounty = bounties[bountyId];
+
+        bounty.status = BountyStatus.Expired;
+        uint256 refundAmount = bounty.reward;
+        bounty.reward = 0;
+
+        (bool success, ) = payable(bounty.poster).call{value: refundAmount}("");
         if (!success) revert RefundFailed();
 
         emit BountyReclaimed(bountyId, bounty.poster, refundAmount);
@@ -144,3 +189,4 @@ contract MathBounty is ReentrancyGuard {
         return posterBounties[msg.sender];
     }
 }
+
