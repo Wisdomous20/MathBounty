@@ -1,3 +1,5 @@
+import { ethers } from "ethers";
+
 export const MATH_BOUNTY_ADDRESS = (
   process.env.NEXT_PUBLIC_MATH_BOUNTY_ADDRESS ??
   "0x0000000000000000000000000000000000000000"
@@ -11,6 +13,28 @@ export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 export function hasConfiguredMathBountyAddress() {
   return MATH_BOUNTY_ADDRESS.toLowerCase() !== ZERO_ADDRESS;
+}
+
+export const MATH_BOUNTY_FUNCTION_SIGNATURES = {
+  postBounty: "postBounty(bytes32,uint256)",
+  submitSolution: "submitSolution(uint256,string)",
+  submitAnswer: "submitAnswer(uint256,string)",
+  reclaimExpired: "reclaimExpired(uint256)",
+  claimRefund: "claimRefund(uint256)",
+  getBounty: "getBounty(uint256)",
+  getBounties: "getBounties(uint256[])",
+  bountyCount: "bountyCount()",
+  getMyPostedBounties: "getMyPostedBounties()",
+} as const;
+
+export type MathBountySubmitMethod = "submitSolution" | "submitAnswer";
+
+export function getFunctionSelector(signature: string) {
+  return ethers.id(signature).slice(2, 10);
+}
+
+export function hasFunctionSelector(bytecode: string, signature: string) {
+  return bytecode.toLowerCase().includes(getFunctionSelector(signature));
 }
 
 export async function assertMathBountyContract(provider: {
@@ -43,6 +67,7 @@ export const MATH_BOUNTY_ABI = [
   "error InvalidExpiry()",
   "function postBounty(bytes32 answerHash, uint256 expiresAt) external payable returns (uint256)",
   "function submitSolution(uint256 bountyId, string calldata answer) external",
+  "function submitAnswer(uint256 bountyId, string calldata answer) external",
   "function reclaimExpired(uint256 bountyId) external",
   "function claimRefund(uint256 bountyId) external",
   "function getBounty(uint256 bountyId) external view returns (tuple(address poster, bytes32 answerHash, uint256 reward, uint256 expiresAt, uint8 status))",
