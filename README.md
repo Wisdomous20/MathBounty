@@ -16,7 +16,7 @@ MathBounty is a decentralized application (dApp) built on Ethereum that enables 
 
 ## 📸 Application Screenshot
 
-[Insert Screenshot Here]
+![alt text](image.png)
 
 ## 🛠 Setup and Installation
 
