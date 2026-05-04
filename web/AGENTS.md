@@ -19,7 +19,7 @@ MathBounty is a decentralized application (dApp) where users can post mathematic
 ## 4. Engineering Rules & Mandates
 - **Wallet Persistence**: Explicit disconnection must be persisted using `wallet:userDisconnected` in `localStorage`.
 - **Security**: Always use Checks-Effects-Interactions (CEI) pattern in contracts (documented in contract layer).
-- **Design**: Follow the "Crystalline Bento" design language (modern, sleek, transparent).
+- **Design**: Follow the "Cyber-Brutalist Bento" design language (raw, high-contrast, sharp corners, grid-based).
 - **Typescript**: Strictly avoid `any`. Use proper interfaces for bounty states and wallet objects.
 
 ## 5. Common Development Commands
@@ -29,4 +29,4 @@ MathBounty is a decentralized application (dApp) where users can post mathematic
 - `npm run typecheck`: Run TypeScript compiler checks.
 
 ---
-*Last Updated: 2026-05-04 - Implemented Wallet Disconnect Persistence.*
+*Last Updated: 2026-05-04 - Synced design language with implementation and created Panel Defense Cheatsheet.*
